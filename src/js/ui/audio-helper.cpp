@@ -97,10 +97,10 @@ void AudioPlayer::init() {
 	}
 }
 
-const std::vector<uint8_t>& AudioPlayer::load(const std::vector<uint8_t>& data) {
+std::span<const uint8_t> AudioPlayer::load(std::span<const uint8_t> data) {
 	stop();
 
-	audio_data = data;
+	audio_data.assign(data.begin(), data.end());
 	duration_cache = 0.0;
 
 	ma_decoder_config decoderConfig = ma_decoder_config_init_default();
@@ -114,7 +114,7 @@ const std::vector<uint8_t>& AudioPlayer::load(const std::vector<uint8_t>& data) 
 		duration_cache = static_cast<double>(frameCount) / static_cast<double>(tempDecoder.outputSampleRate);
 	ma_decoder_uninit(&tempDecoder);
 
-	return audio_data;
+	return std::span<const uint8_t>(audio_data);
 }
 
 void AudioPlayer::unload() {

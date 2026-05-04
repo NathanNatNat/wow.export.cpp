@@ -74,16 +74,6 @@ These files, features, and options have been deliberately removed from the C++ p
 
 These deviations exist because a direct port is not possible due to fundamental differences between JavaScript and C++.
 
-### [buffer.cpp] `alloc()` and `setCapacity()` always zero-fill regardless of `secure` flag
-- **JS Source**: `src/js/buffer.js` lines 54–56 and 1021–1029
-- **Reason**: JS `Buffer.allocUnsafe(length)` returns uninitialized memory. C++ `std::vector<uint8_t>` always value-initializes (zeroes) on construction and resize. Achieving truly uninitialized memory would require replacing the `std::vector` storage with a custom allocator or raw allocation, which is a significant architectural change to BufferWrapper.
-- **Impact**: Performance-only. Both paths produce zeroed memory. Callers write into the buffer immediately after allocation, so the extra zero-fill has negligible practical impact.
-
-### [buffer.cpp] `fromMmap()` copies mmap data into a vector
-- **JS Source**: `src/js/buffer.js` lines 123–127
-- **Reason**: BufferWrapper uses `std::vector<uint8_t>` as its internal storage, which owns its memory. Supporting a non-owning view of mmap'd pages would require the class to support a dual-mode storage (owned vector vs borrowed pointer+size), affecting every method that accesses buffer data. The mmap pointer and size are stored for proper cleanup.
-- **Impact**: Higher memory usage for memory-mapped files (data is duplicated). For large game data archives this increases memory consumption and load time compared to zero-copy wrapping.
-
 ### [core.cpp] `progressLoadingScreen()` does not await redraw
 - **JS Source**: `src/js/core.js` lines 442–450
 - **Reason**: JS uses `await generics.redraw()` to yield control to the event loop and wait for two animation frames before returning, ensuring each progress step is visible. In the C++ ImGui architecture, the main loop owns the render cycle — there is no mechanism to "await" a frame render from within a function called during frame processing. The C++ version posts progress updates to the main thread queue via `postToMainThread`, which applies them on the next frame.

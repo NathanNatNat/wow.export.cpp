@@ -253,7 +253,7 @@ static void pump_audio_export() {
 
 	if (file_name.ends_with(".unk_sound")) {
 		BufferWrapper export_buf = core::view->casc->getVirtualFileByName(file_name);
-		export_data = std::move(export_buf.raw());
+		export_data = export_buf.toVector();
 		has_export_data = true;
 
 		const AudioType file_type = detectFileType(BufferWrapper(export_data));
@@ -283,7 +283,7 @@ static void pump_audio_export() {
 		if (task.overwrite_files || !generics::fileExists(export_path)) {
 			if (!has_export_data) {
 				BufferWrapper export_buf = core::view->casc->getVirtualFileByName(file_name);
-				export_data = std::move(export_buf.raw());
+				export_data = export_buf.toVector();
 			}
 
 			BufferWrapper out_buf(std::move(export_data));

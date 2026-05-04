@@ -62,7 +62,7 @@ public:
 	 * @param data Raw audio bytes (OGG, MP3, etc.).
 	 * @returns Loaded audio data buffer.
 	 */
-	const std::vector<uint8_t>& load(const std::vector<uint8_t>& data);
+	std::span<const uint8_t> load(std::span<const uint8_t> data);
 
 	/**
 	 * Unload the current audio buffer.

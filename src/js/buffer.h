@@ -14,6 +14,7 @@
 #include <optional>
 #include <filesystem>
 #include <variant>
+#include <memory>
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -106,10 +107,10 @@ public:
 	BufferWrapper& operator=(BufferWrapper&& other) noexcept;
 
 	/** Copy constructor. */
-	BufferWrapper(const BufferWrapper& other) = default;
+	BufferWrapper(const BufferWrapper& other);
 
 	/** Copy assignment. */
-	BufferWrapper& operator=(const BufferWrapper& other) = default;
+	BufferWrapper& operator=(const BufferWrapper& other);
 
 	// TODO 69: The JS BufferWrapper has no virtual methods or inheritance.
 	// In C++, _checkBounds is virtual and the destructor is virtual so that
@@ -133,8 +134,11 @@ public:
 	size_t offset() const;
 
 	/** Get the raw buffer wrapped by this instance. */
-	const std::vector<uint8_t>& raw() const;
-	std::vector<uint8_t>& raw();
+	std::span<const uint8_t> raw() const;
+	std::span<uint8_t> raw();
+
+	/** Copy the buffer data into a new vector. */
+	std::vector<uint8_t> toVector() const;
 
 	// JS get internalArrayBuffer() returns this._buf.buffer (an ArrayBuffer object).
 	// C++ returns _buf.data() (a raw uint8_t*) — a different type with different semantics.
@@ -498,8 +502,11 @@ protected:
 
 private:
 	size_t _ofs = 0;
-	std::vector<uint8_t> _buf;
+	uint8_t* _data = nullptr;
+	size_t _size = 0;
+	std::vector<uint8_t> _vec;
+	std::unique_ptr<uint8_t[]> _raw;
 	void* _mmap = nullptr;
-	size_t _mmapSize = 0; // Original mapping size for correct munmap() after setCapacity()
+	size_t _mmapSize = 0;
 	std::optional<std::string> dataURL;
 };

@@ -14,7 +14,7 @@
 
 - [x] 3. [buffer.cpp] `alloc()` and `setCapacity()` always zero buffer regardless of `secure` flag
   - **JS Source**: `src/js/buffer.js` lines 54–56 and 1021–1029
-  - **Status**: Verified — necessary deviation documented in DEVIATIONS.md (C++ std::vector always value-initializes; no equivalent to Buffer.allocUnsafe without custom allocators)
+  - **Status**: Verified — fixed; BufferWrapper refactored from `std::vector<uint8_t>` to `std::unique_ptr<uint8_t[]>` storage. `alloc(length, false)` now uses `new uint8_t[length]` (uninitialized), `alloc(length, true)` uses `new uint8_t[length]()` (zeroed). `setCapacity()` similarly respects the `secure` flag.
   - **Details**: JS `alloc(length, secure=true)` uses `Buffer.allocUnsafe(length)` when `secure=false` (uninitialized memory, faster for large buffers) and `Buffer.alloc(length)` when `secure=true` (zeroed). The C++ version (buffer.cpp L377) always uses `std::vector<uint8_t>(length, 0)` regardless of the `secure` flag. Same issue in `setCapacity()` (buffer.cpp L1062). Performance-only impact since callers write into the buffer immediately, but it is a behavioral deviation.
 
 - [x] 4. [blob.cpp] `slice()` treats `end=0` differently from JS due to falsy-check semantics
@@ -24,7 +24,7 @@
 
 - [x] 5. [buffer.cpp] `fromMmap()` copies data instead of zero-copy wrapping
   - **JS Source**: `src/js/buffer.js` lines 123–127
-  - **Status**: Verified — necessary deviation documented in DEVIATIONS.md (BufferWrapper uses std::vector internally; supporting non-owning mmap views would require an architectural refactor)
+  - **Status**: Verified — fixed; BufferWrapper refactored to support borrowed pointer storage alongside owned allocation. `fromMmap()` now sets `_data` directly to the mmap pointer with zero copy.
   - **Details**: JS wraps the mmap data zero-copy via `Buffer.from(mmapObj.data)` and stores a reference to the mmap object to prevent GC. C++ (buffer.cpp L485) copies the data into a `std::vector<uint8_t>` with `std::vector<uint8_t>(src, src + size)`, defeating the purpose of memory mapping. For large game data files this could significantly increase memory usage and load time.
 
 - [x] 6. [core.cpp] `progressLoadingScreen()` does not await redraw like JS version

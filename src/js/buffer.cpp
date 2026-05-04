@@ -335,7 +335,7 @@ return result;
 #define IMPL_READ_U(RetType, Name, N, LE) \
 RetType BufferWrapper::Name() { \
 _checkBounds(N); \
-auto v = static_cast<RetType>(read_uint<N, LE>(_buf.data() + _ofs)); \
+auto v = static_cast<RetType>(read_uint<N, LE>(_data + _ofs)); \
 _ofs += N; \
 return v; \
 } \
@@ -343,7 +343,7 @@ std::vector<RetType> BufferWrapper::Name(size_t count) { \
 _checkBounds(N * count); \
 std::vector<RetType> values(count); \
 for (size_t i = 0; i < count; i++) { \
-values[i] = static_cast<RetType>(read_uint<N, LE>(_buf.data() + _ofs)); \
+values[i] = static_cast<RetType>(read_uint<N, LE>(_data + _ofs)); \
 _ofs += N; \
 } \
 return values; \
@@ -352,7 +352,7 @@ return values; \
 #define IMPL_READ_S(RetType, Name, N, LE) \
 RetType BufferWrapper::Name() { \
 _checkBounds(N); \
-auto v = static_cast<RetType>(sign_extend<N>(read_uint<N, LE>(_buf.data() + _ofs))); \
+auto v = static_cast<RetType>(sign_extend<N>(read_uint<N, LE>(_data + _ofs))); \
 _ofs += N; \
 return v; \
 } \
@@ -360,7 +360,7 @@ std::vector<RetType> BufferWrapper::Name(size_t count) { \
 _checkBounds(N * count); \
 std::vector<RetType> values(count); \
 for (size_t i = 0; i < count; i++) { \
-values[i] = static_cast<RetType>(sign_extend<N>(read_uint<N, LE>(_buf.data() + _ofs))); \
+values[i] = static_cast<RetType>(sign_extend<N>(read_uint<N, LE>(_data + _ofs))); \
 _ofs += N; \
 } \
 return values; \
@@ -369,13 +369,20 @@ return values; \
 #define IMPL_WRITE_INT(ParamType, Name, N, LE) \
 void BufferWrapper::Name(ParamType value) { \
 _checkBounds(N); \
-write_uint<N, LE>(_buf.data() + _ofs, static_cast<uint64_t>(value)); \
+write_uint<N, LE>(_data + _ofs, static_cast<uint64_t>(value)); \
 _ofs += N; \
 }
 
 BufferWrapper BufferWrapper::alloc(size_t length, bool secure) {
-std::vector<uint8_t> buf(length, 0);
-return BufferWrapper(std::move(buf));
+BufferWrapper wrapper;
+if (secure) {
+wrapper._raw = std::unique_ptr<uint8_t[]>(new uint8_t[length]());
+} else {
+wrapper._raw = std::unique_ptr<uint8_t[]>(new uint8_t[length]);
+}
+wrapper._data = wrapper._raw.get();
+wrapper._size = length;
+return wrapper;
 }
 
 BufferWrapper BufferWrapper::from(std::span<const uint8_t> source) {
@@ -398,7 +405,7 @@ total += b.byteLength();
 std::vector<uint8_t> combined;
 combined.reserve(total);
 for (const auto& b : buffers)
-combined.insert(combined.end(), b._buf.begin(), b._buf.end());
+combined.insert(combined.end(), b._data, b._data + b._size);
 
 return BufferWrapper(std::move(combined));
 }
@@ -480,23 +487,38 @@ return BufferWrapper(std::move(buf));
 }
 
 BufferWrapper BufferWrapper::fromMmap(void* mmapData, size_t size) {
-auto* src = static_cast<const uint8_t*>(mmapData);
-BufferWrapper wrapper(std::vector<uint8_t>(src, src + size));
+BufferWrapper wrapper;
+wrapper._data = static_cast<uint8_t*>(mmapData);
+wrapper._size = size;
 wrapper._mmap = mmapData;
 wrapper._mmapSize = size;
 return wrapper;
 }
 
-BufferWrapper::BufferWrapper() : _ofs(0) {}
+BufferWrapper::BufferWrapper() : _ofs(0), _data(nullptr), _size(0) {}
 
 BufferWrapper::BufferWrapper(std::vector<uint8_t> buf)
-: _ofs(0), _buf(std::move(buf)) {}
+: _ofs(0), _vec(std::move(buf)) {
+_data = _vec.data();
+_size = _vec.size();
+}
 
 BufferWrapper::BufferWrapper(std::vector<uint8_t> buf, size_t offset)
-: _ofs(offset), _buf(std::move(buf)) {}
+: _ofs(offset), _vec(std::move(buf)) {
+_data = _vec.data();
+_size = _vec.size();
+}
 
 BufferWrapper::BufferWrapper(BufferWrapper&& other) noexcept
-: _ofs(other._ofs), _buf(std::move(other._buf)), _mmap(other._mmap), _mmapSize(other._mmapSize), dataURL(std::move(other.dataURL)) {
+: _ofs(other._ofs), _size(other._size),
+  _vec(std::move(other._vec)), _raw(std::move(other._raw)),
+  _mmap(other._mmap), _mmapSize(other._mmapSize),
+  dataURL(std::move(other.dataURL)) {
+if (_raw) _data = _raw.get();
+else if (_mmap) _data = static_cast<uint8_t*>(_mmap);
+else _data = _vec.data();
+other._data = nullptr;
+other._size = 0;
 other._ofs = 0;
 other._mmap = nullptr;
 other._mmapSize = 0;
@@ -505,10 +527,17 @@ other._mmapSize = 0;
 BufferWrapper& BufferWrapper::operator=(BufferWrapper&& other) noexcept {
 if (this != &other) {
 _ofs = other._ofs;
-_buf = std::move(other._buf);
+_size = other._size;
+_vec = std::move(other._vec);
+_raw = std::move(other._raw);
 _mmap = other._mmap;
 _mmapSize = other._mmapSize;
 dataURL = std::move(other.dataURL);
+if (_raw) _data = _raw.get();
+else if (_mmap) _data = static_cast<uint8_t*>(_mmap);
+else _data = _vec.data();
+other._data = nullptr;
+other._size = 0;
 other._ofs = 0;
 other._mmap = nullptr;
 other._mmapSize = 0;
@@ -516,30 +545,61 @@ other._mmapSize = 0;
 return *this;
 }
 
+BufferWrapper::BufferWrapper(const BufferWrapper& other)
+: _ofs(other._ofs), _size(other._size), dataURL(other.dataURL) {
+if (other._size > 0 && other._data) {
+_vec.assign(other._data, other._data + other._size);
+_data = _vec.data();
+}
+}
+
+BufferWrapper& BufferWrapper::operator=(const BufferWrapper& other) {
+if (this != &other) {
+_ofs = other._ofs;
+_size = other._size;
+_raw.reset();
+_mmap = nullptr;
+_mmapSize = 0;
+dataURL = other.dataURL;
+if (other._size > 0 && other._data) {
+_vec.assign(other._data, other._data + other._size);
+_data = _vec.data();
+} else {
+_vec.clear();
+_data = nullptr;
+}
+}
+return *this;
+}
+
 BufferWrapper::~BufferWrapper() = default;
 
 size_t BufferWrapper::byteLength() const {
-return _buf.size();
+return _size;
 }
 
 size_t BufferWrapper::remainingBytes() const {
-return _buf.size() - _ofs;
+return _size - _ofs;
 }
 
 size_t BufferWrapper::offset() const {
 return _ofs;
 }
 
-const std::vector<uint8_t>& BufferWrapper::raw() const {
-return _buf;
+std::span<const uint8_t> BufferWrapper::raw() const {
+return {_data, _size};
 }
 
-std::vector<uint8_t>& BufferWrapper::raw() {
-return _buf;
+std::span<uint8_t> BufferWrapper::raw() {
+return {_data, _size};
+}
+
+std::vector<uint8_t> BufferWrapper::toVector() const {
+return {_data, _data + _size};
 }
 
 const uint8_t* BufferWrapper::internalArrayBuffer() const {
-return _buf.data();
+return _data;
 }
 
 void BufferWrapper::seek(int64_t ofs) {
@@ -562,7 +622,7 @@ _ofs = static_cast<size_t>(pos);
 
 int64_t BufferWrapper::readIntLE(size_t byteLength) {
 _checkBounds(byteLength);
-uint64_t val = read_var_uint_le(_buf.data() + _ofs, byteLength);
+uint64_t val = read_var_uint_le(_data + _ofs, byteLength);
 _ofs += byteLength;
 return sign_extend_var(val, byteLength);
 }
@@ -571,7 +631,7 @@ std::vector<int64_t> BufferWrapper::readIntLE(size_t byteLength, size_t count) {
 _checkBounds(byteLength * count);
 std::vector<int64_t> values(count);
 for (size_t i = 0; i < count; i++) {
-uint64_t val = read_var_uint_le(_buf.data() + _ofs, byteLength);
+uint64_t val = read_var_uint_le(_data + _ofs, byteLength);
 _ofs += byteLength;
 values[i] = sign_extend_var(val, byteLength);
 }
@@ -580,7 +640,7 @@ return values;
 
 uint64_t BufferWrapper::readUIntLE(size_t byteLength) {
 _checkBounds(byteLength);
-uint64_t val = read_var_uint_le(_buf.data() + _ofs, byteLength);
+uint64_t val = read_var_uint_le(_data + _ofs, byteLength);
 _ofs += byteLength;
 return val;
 }
@@ -589,7 +649,7 @@ std::vector<uint64_t> BufferWrapper::readUIntLE(size_t byteLength, size_t count)
 _checkBounds(byteLength * count);
 std::vector<uint64_t> values(count);
 for (size_t i = 0; i < count; i++) {
-values[i] = read_var_uint_le(_buf.data() + _ofs, byteLength);
+values[i] = read_var_uint_le(_data + _ofs, byteLength);
 _ofs += byteLength;
 }
 return values;
@@ -597,7 +657,7 @@ return values;
 
 int64_t BufferWrapper::readIntBE(size_t byteLength) {
 _checkBounds(byteLength);
-uint64_t val = read_var_uint_be(_buf.data() + _ofs, byteLength);
+uint64_t val = read_var_uint_be(_data + _ofs, byteLength);
 _ofs += byteLength;
 return sign_extend_var(val, byteLength);
 }
@@ -606,7 +666,7 @@ std::vector<int64_t> BufferWrapper::readIntBE(size_t byteLength, size_t count) {
 _checkBounds(byteLength * count);
 std::vector<int64_t> values(count);
 for (size_t i = 0; i < count; i++) {
-uint64_t val = read_var_uint_be(_buf.data() + _ofs, byteLength);
+uint64_t val = read_var_uint_be(_data + _ofs, byteLength);
 _ofs += byteLength;
 values[i] = sign_extend_var(val, byteLength);
 }
@@ -615,7 +675,7 @@ return values;
 
 uint64_t BufferWrapper::readUIntBE(size_t byteLength) {
 _checkBounds(byteLength);
-uint64_t val = read_var_uint_be(_buf.data() + _ofs, byteLength);
+uint64_t val = read_var_uint_be(_data + _ofs, byteLength);
 _ofs += byteLength;
 return val;
 }
@@ -624,7 +684,7 @@ std::vector<uint64_t> BufferWrapper::readUIntBE(size_t byteLength, size_t count)
 _checkBounds(byteLength * count);
 std::vector<uint64_t> values(count);
 for (size_t i = 0; i < count; i++) {
-values[i] = read_var_uint_be(_buf.data() + _ofs, byteLength);
+values[i] = read_var_uint_be(_data + _ofs, byteLength);
 _ofs += byteLength;
 }
 return values;
@@ -665,7 +725,7 @@ IMPL_READ_U(uint64_t, readUInt64BE, 8, false)
 
 float BufferWrapper::readFloatLE() {
 _checkBounds(4);
-uint32_t bits = static_cast<uint32_t>(read_uint_le<4>(_buf.data() + _ofs));
+uint32_t bits = static_cast<uint32_t>(read_uint_le<4>(_data + _ofs));
 _ofs += 4;
 float f;
 std::memcpy(&f, &bits, sizeof(f));
@@ -676,7 +736,7 @@ std::vector<float> BufferWrapper::readFloatLE(size_t count) {
 _checkBounds(4 * count);
 std::vector<float> values(count);
 for (size_t i = 0; i < count; i++) {
-uint32_t bits = static_cast<uint32_t>(read_uint_le<4>(_buf.data() + _ofs));
+uint32_t bits = static_cast<uint32_t>(read_uint_le<4>(_data + _ofs));
 _ofs += 4;
 std::memcpy(&values[i], &bits, sizeof(float));
 }
@@ -685,7 +745,7 @@ return values;
 
 float BufferWrapper::readFloatBE() {
 _checkBounds(4);
-uint32_t bits = static_cast<uint32_t>(read_uint_be<4>(_buf.data() + _ofs));
+uint32_t bits = static_cast<uint32_t>(read_uint_be<4>(_data + _ofs));
 _ofs += 4;
 float f;
 std::memcpy(&f, &bits, sizeof(f));
@@ -696,7 +756,7 @@ std::vector<float> BufferWrapper::readFloatBE(size_t count) {
 _checkBounds(4 * count);
 std::vector<float> values(count);
 for (size_t i = 0; i < count; i++) {
-uint32_t bits = static_cast<uint32_t>(read_uint_be<4>(_buf.data() + _ofs));
+uint32_t bits = static_cast<uint32_t>(read_uint_be<4>(_data + _ofs));
 _ofs += 4;
 std::memcpy(&values[i], &bits, sizeof(float));
 }
@@ -705,7 +765,7 @@ return values;
 
 double BufferWrapper::readDoubleLE() {
 _checkBounds(8);
-uint64_t bits = read_uint_le<8>(_buf.data() + _ofs);
+uint64_t bits = read_uint_le<8>(_data + _ofs);
 _ofs += 8;
 double d;
 std::memcpy(&d, &bits, sizeof(d));
@@ -716,7 +776,7 @@ std::vector<double> BufferWrapper::readDoubleLE(size_t count) {
 _checkBounds(8 * count);
 std::vector<double> values(count);
 for (size_t i = 0; i < count; i++) {
-uint64_t bits = read_uint_le<8>(_buf.data() + _ofs);
+uint64_t bits = read_uint_le<8>(_data + _ofs);
 _ofs += 8;
 std::memcpy(&values[i], &bits, sizeof(double));
 }
@@ -725,7 +785,7 @@ return values;
 
 double BufferWrapper::readDoubleBE() {
 _checkBounds(8);
-uint64_t bits = read_uint_be<8>(_buf.data() + _ofs);
+uint64_t bits = read_uint_be<8>(_data + _ofs);
 _ofs += 8;
 double d;
 std::memcpy(&d, &bits, sizeof(d));
@@ -736,7 +796,7 @@ std::vector<double> BufferWrapper::readDoubleBE(size_t count) {
 _checkBounds(8 * count);
 std::vector<double> values(count);
 for (size_t i = 0; i < count; i++) {
-uint64_t bits = read_uint_be<8>(_buf.data() + _ofs);
+uint64_t bits = read_uint_be<8>(_data + _ofs);
 _ofs += 8;
 std::memcpy(&values[i], &bits, sizeof(double));
 }
@@ -749,7 +809,7 @@ constexpr char hex_chars[] = "0123456789abcdef";
 std::string hex;
 hex.reserve(length * 2);
 for (size_t i = 0; i < length; i++) {
-uint8_t byte = _buf[_ofs + i];
+uint8_t byte = _data[_ofs + i];
 hex += hex_chars[byte >> 4];
 hex += hex_chars[byte & 0x0f];
 }
@@ -764,7 +824,7 @@ return readBuffer(remainingBytes(), false);
 BufferWrapper BufferWrapper::readBuffer(size_t length, bool doInflate) {
 _checkBounds(length);
 
-std::vector<uint8_t> buf(_buf.begin() + _ofs, _buf.begin() + _ofs + length);
+std::vector<uint8_t> buf(_data + _ofs, _data + _ofs + length);
 _ofs += length;
 
 if (doInflate)
@@ -782,7 +842,7 @@ std::variant<BufferWrapper, std::vector<uint8_t>> BufferWrapper::readBuffer(size
 std::vector<uint8_t> BufferWrapper::readBufferRaw(size_t length, bool doInflate) {
 _checkBounds(length);
 
-std::vector<uint8_t> buf(_buf.begin() + _ofs, _buf.begin() + _ofs + length);
+std::vector<uint8_t> buf(_data + _ofs, _data + _ofs + length);
 _ofs += length;
 
 if (doInflate)
@@ -800,7 +860,7 @@ if (length == 0)
 return "";
 
 _checkBounds(length);
-const uint8_t* ptr = _buf.data() + _ofs;
+const uint8_t* ptr = _data + _ofs;
 std::string str;
 
 if (encoding == "ascii") {
@@ -888,7 +948,7 @@ fill(value, remainingBytes());
 
 void BufferWrapper::fill(uint8_t value, size_t length) {
 _checkBounds(length);
-std::memset(_buf.data() + _ofs, value, length);
+std::memset(_data + _ofs, value, length);
 _ofs += length;
 }
 
@@ -929,7 +989,7 @@ void BufferWrapper::writeFloatLE(float value) {
 _checkBounds(4);
 uint32_t bits;
 std::memcpy(&bits, &value, sizeof(bits));
-write_uint_le<4>(_buf.data() + _ofs, bits);
+write_uint_le<4>(_data + _ofs, bits);
 _ofs += 4;
 }
 
@@ -937,7 +997,7 @@ void BufferWrapper::writeFloatBE(float value) {
 _checkBounds(4);
 uint32_t bits;
 std::memcpy(&bits, &value, sizeof(bits));
-write_uint_be<4>(_buf.data() + _ofs, bits);
+write_uint_be<4>(_data + _ofs, bits);
 _ofs += 4;
 }
 
@@ -951,7 +1011,7 @@ buf._checkBounds(copyLength);
 
 _checkBounds(copyLength);
 
-std::memcpy(_buf.data() + _ofs, buf._buf.data() + startIndex, copyLength);
+std::memcpy(_data + _ofs, buf._data + startIndex, copyLength);
 _ofs += copyLength;
 buf._ofs += copyLength;
 }
@@ -964,7 +1024,7 @@ else if (buf.size() <= copyLength) {
 
 _checkBounds(copyLength);
 
-std::memcpy(_buf.data() + _ofs, buf.data(), copyLength);
+std::memcpy(_data + _ofs, buf.data(), copyLength);
 _ofs += copyLength;
 }
 
@@ -974,7 +1034,7 @@ std::ofstream ofs(file, std::ios::binary);
 if (!ofs)
 throw std::runtime_error("Failed to open file for writing: " + file.string());
 
-ofs.write(reinterpret_cast<const char*>(_buf.data()), static_cast<std::streamsize>(_buf.size()));
+ofs.write(reinterpret_cast<const char*>(_data), static_cast<std::streamsize>(_size));
 if (!ofs)
 throw std::runtime_error("Failed to write file: " + file.string());
 }
@@ -1009,7 +1069,7 @@ return -1;
 
 const std::string& BufferWrapper::getDataURL() {
 if (!dataURL)
-dataURL = URLPolyfill::createObjectURL(_buf, "");
+dataURL = URLPolyfill::createObjectURL(std::span<const uint8_t>(_data, _size), "");
 
 return *dataURL;
 }
@@ -1029,7 +1089,7 @@ dataURL.reset();
 }
 
 std::string BufferWrapper::toBase64() const {
-return base64_encode(_buf.data(), _buf.size());
+return base64_encode(_data, _size);
 }
 
 BufferWrapper::DecodedAudioData BufferWrapper::decodeAudio() const {
@@ -1037,7 +1097,7 @@ BufferWrapper::DecodedAudioData BufferWrapper::decodeAudio() const {
 
 	ma_decoder decoder;
 	ma_decoder_config decoderConfig = ma_decoder_config_init(ma_format_f32, 0, 0);
-	if (ma_decoder_init_memory(_buf.data(), _buf.size(), &decoderConfig, &decoder) != MA_SUCCESS)
+	if (ma_decoder_init_memory(_data, _size, &decoderConfig, &decoder) != MA_SUCCESS)
 		throw std::runtime_error("decodeAudio: failed to initialize decoder");
 
 	decoded.channels = decoder.outputChannels;
@@ -1056,13 +1116,21 @@ BufferWrapper::DecodedAudioData BufferWrapper::decodeAudio() const {
 }
 
 void BufferWrapper::setCapacity(size_t capacity, bool secure) {
-if (capacity == byteLength())
+if (capacity == _size)
 return;
 
-std::vector<uint8_t> buf(capacity, 0);
-size_t copyLen = std::min(capacity, byteLength());
-std::memcpy(buf.data(), _buf.data(), copyLen);
-_buf = std::move(buf);
+auto newBuf = secure
+? std::unique_ptr<uint8_t[]>(new uint8_t[capacity]())
+: std::unique_ptr<uint8_t[]>(new uint8_t[capacity]);
+
+size_t copyLen = std::min(capacity, _size);
+if (copyLen > 0)
+std::memcpy(newBuf.get(), _data, copyLen);
+
+_raw = std::move(newBuf);
+_vec.clear();
+_data = _raw.get();
+_size = capacity;
 }
 
 std::string BufferWrapper::calculateHash(std::string_view hash, std::string_view encoding) {
@@ -1070,7 +1138,7 @@ const EVP_MD* md = hash_name_to_md(hash);
 if (!md)
 throw std::runtime_error("calculateHash: unsupported hash algorithm '" + std::string(hash) + "'");
 
-auto digest = evp_hash(_buf.data(), _buf.size(), md);
+auto digest = evp_hash(_data, _size, md);
 
 if (encoding == "hex")
 return digest_to_hex(digest);
@@ -1081,14 +1149,14 @@ throw std::runtime_error("calculateHash: unsupported encoding '" + std::string(e
 
 bool BufferWrapper::isZeroed() const {
 for (size_t i = 0, n = byteLength(); i < n; i++) {
-if (_buf[i] != 0x0)
+if (_data[i] != 0x0)
 return false;
 }
 return true;
 }
 
 uint32_t BufferWrapper::getCRC32() const {
-return crc32(std::span<const uint8_t>(_buf));
+return crc32(std::span<const uint8_t>(_data, _size));
 }
 
 void BufferWrapper::unmapSource() {
@@ -1104,8 +1172,9 @@ _mmapSize = 0;
 }
 
 BufferWrapper BufferWrapper::deflate() const {
-return BufferWrapper(zlib_deflate(_buf.data(), _buf.size()));
+return BufferWrapper(zlib_deflate(_data, _size));
 }
+
 
 void BufferWrapper::_checkBounds(size_t length) {
 if (remainingBytes() < length)

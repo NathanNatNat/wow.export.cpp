@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <span>
 #include <functional>
 #include <optional>
 
@@ -45,7 +46,7 @@ public:
 
 	std::optional<VP9Config> parse_header();
 
-	int64_t find_chunk(const std::vector<uint8_t>& data, const char (&fourcc)[5]);
+	int64_t find_chunk(std::span<const uint8_t> data, const char (&fourcc)[5]);
 
 	void extract_frames(const std::function<void(const FrameInfo&)>& callback);
 

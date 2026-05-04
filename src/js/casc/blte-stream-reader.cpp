@@ -212,7 +212,7 @@ std::optional<std::vector<uint8_t>> BLTEStreamReader::ReadableStream::pull() {
 
 	BufferWrapper decodedBlock = owner->getBlockAsync(currentBlock).get();
 	currentBlock++;
-	return decodedBlock.raw();
+	return decodedBlock.toVector();
 }
 
 void BLTEStreamReader::ReadableStream::cancel() {

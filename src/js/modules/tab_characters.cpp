@@ -1888,7 +1888,7 @@ if (comma_pos != std::string::npos)
 thumb_str = thumb_str.substr(comma_pos + 1);
 
 std::string thumb_path = (fs::path(dir) / (name + "-" + id + ".png")).string();
-std::vector<uint8_t> thumb_bytes = BufferWrapper::fromBase64(thumb_str).raw();
+std::vector<uint8_t> thumb_bytes = BufferWrapper::fromBase64(thumb_str).toVector();
 std::ofstream thumb_out(thumb_path, std::ios::binary);
 thumb_out.write(reinterpret_cast<const char*>(thumb_bytes.data()), static_cast<std::streamsize>(thumb_bytes.size()));
 }
@@ -2249,7 +2249,7 @@ size_t comma_pos = thumb_str.find(',');
 if (comma_pos != std::string::npos)
 thumb_str = thumb_str.substr(comma_pos + 1);
 
-std::vector<uint8_t> thumb_bytes = BufferWrapper::fromBase64(thumb_str).raw();
+std::vector<uint8_t> thumb_bytes = BufferWrapper::fromBase64(thumb_str).toVector();
 std::string thumb_path = (fs::path(dir) / (name + "-" + id + ".png")).string();
 std::ofstream thumb_out(thumb_path, std::ios::binary);
 thumb_out.write(reinterpret_cast<const char*>(thumb_bytes.data()), static_cast<std::streamsize>(thumb_bytes.size()));
