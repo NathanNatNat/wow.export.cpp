@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/71 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/74 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -356,3 +356,18 @@
   - **JS Source**: `src/js/modules/tab_creatures.js` line 1170, `src/js/modules/tab_decor.js` line 404
   - **Status**: Pending
   - **Details**: JS uses `name_a.localeCompare(name_b)` for sorting creature/decor lists, which is locale-aware and correctly handles accented characters (e.g., "Élan" sorts near "Elan"). C++ (tab_creatures.cpp L1539, tab_decor.cpp L361) uses `name_a < name_b` after `tolower`, which is a byte-by-byte comparison where accented UTF-8 characters sort after all ASCII. WoW creature/decor names frequently include non-ASCII characters. Fix: use a locale-aware comparison or ICU collation.
+
+- [ ] 72. [tab_textures.cpp] Missing override texture toast banner when texture list is being filtered
+  - **JS Source**: `src/js/modules/tab_textures.js` lines 284–288
+  - **Status**: Pending
+  - **Details**: JS template renders a toast-like banner when `overrideTextureList.length > 0` and no active toast exists, showing "Filtering textures for item: {overrideTextureName}" with a "Remove" clickable span and a close button, both calling `remove_override_textures()`. C++ `render()` has no equivalent banner rendering. The `remove_override_textures()` function exists (tab_textures.cpp L829–834) but is never triggered from the UI because the banner is absent. Fix: add an ImGui banner at the top of the tab when `view.overrideTextureList` is non-empty, displaying the override texture name and a Remove button that calls `remove_override_textures()`.
+
+- [ ] 73. [tab_videos.cpp] Video playback opens in external system player instead of embedded inline video
+  - **JS Source**: `src/js/modules/tab_videos.js` lines 219–276
+  - **Status**: Pending
+  - **Details**: JS `play_streaming_video` sets `video.src = url` on an HTML5 `<video>` element, loads subtitles into a `<track>` element with VTT format, handles `video.play()` errors, `onended` (resets streaming state), and `onerror` (shows error toast). Users get inline video with play/pause controls, seeking, and subtitle display. C++ `play_streaming_video` (tab_videos.cpp L264–283) calls `core::openInExplorer(url)` to open the video URL in the system's default handler. No inline playback, no subtitle display, no playback event handling (ended/error). The preview container shows "Video opened in external player" text with the URL. This is a platform limitation (ImGui has no video widget), but the JS's onended/onerror state management, subtitle track toggling, and inline playback are all absent.
+
+- [ ] 74. [data-exporter.cpp] `exportRawDB2` checks `byteLength()==0` instead of null/falsy check
+  - **JS Source**: `src/js/ui/data-exporter.js` line 115
+  - **Status**: Pending
+  - **Details**: JS checks `if (!fileData)` after `core.view.casc.getFile(fileDataID, true)`, which is a falsy check — null/undefined trigger the error, but an empty Buffer (truthy) would not. C++ (data-exporter.cpp L158) checks `if (fileData.byteLength() == 0)`, which treats a valid but empty buffer as an error. If CASC returns a valid zero-length file (e.g., a placeholder), JS would export it as a 0-byte file while C++ would throw "Failed to retrieve DB2 file from CASC". Fix: change the check to verify the BufferWrapper is in a valid/non-default state rather than checking length.
