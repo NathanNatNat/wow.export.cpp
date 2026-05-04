@@ -1232,10 +1232,9 @@ void render() {
 	if (app::layout::BeginPreviewContainer("video-preview-container", regions)) {
 		if (is_streaming || view.videoPlayerState) {
 			if (!current_video_url.empty() && mpv_render_ctx) {
-				const float controls_height = 28.0f;
 				ImVec2 avail = ImGui::GetContentRegionAvail();
 				int render_w = static_cast<int>(avail.x);
-				int render_h = static_cast<int>(avail.y - controls_height);
+				int render_h = static_cast<int>(avail.y);
 				if (render_w < 1) render_w = 1;
 				if (render_h < 1) render_h = 1;
 
@@ -1267,9 +1266,19 @@ void render() {
 					mpv_render_context_render(mpv_render_ctx, render_params);
 				}
 
+				ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+
 				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(mpv_texture)),
 					ImVec2(static_cast<float>(render_w), static_cast<float>(render_h)),
 					ImVec2(0, 1), ImVec2(1, 0));
+
+				bool video_hovered = ImGui::IsItemHovered();
+				if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+					int paused_click = 0;
+					mpv_get_property(mpv_ctx, "pause", MPV_FORMAT_FLAG, &paused_click);
+					int toggle = !paused_click;
+					mpv_set_property(mpv_ctx, "pause", MPV_FORMAT_FLAG, &toggle);
+				}
 
 				double time_pos = 0.0, duration = 0.0;
 				int paused = 0;
@@ -1279,39 +1288,77 @@ void render() {
 				mpv_get_property(mpv_ctx, "pause", MPV_FORMAT_FLAG, &paused);
 				mpv_get_property(mpv_ctx, "volume", MPV_FORMAT_DOUBLE, &volume);
 
-				if (ImGui::SmallButton(paused ? ">" : "||")) {
+				const float bar_height = 36.0f;
+				const float bar_pad = 8.0f;
+				ImVec2 bar_min(cursor_pos.x, cursor_pos.y + render_h - bar_height);
+				ImVec2 bar_max(cursor_pos.x + render_w, cursor_pos.y + render_h);
+
+				ImDrawList* dl = ImGui::GetWindowDrawList();
+				dl->AddRectFilled(bar_min, bar_max, IM_COL32(0, 0, 0, 180));
+
+				float cx = bar_min.x + bar_pad;
+				float cy = bar_min.y + (bar_height - ImGui::GetTextLineHeight()) * 0.5f;
+
+				ImGui::SetCursorScreenPos(ImVec2(cx, cy));
+				if (ImGui::SmallButton(paused ? "\xe2\x96\xb6" : "\xe2\x8f\xb8")) {
 					int toggle = !paused;
 					mpv_set_property(mpv_ctx, "pause", MPV_FORMAT_FLAG, &toggle);
 				}
+				cx += ImGui::GetItemRectSize().x + bar_pad;
 
-				ImGui::SameLine();
 				int cur_min = static_cast<int>(time_pos) / 60;
 				int cur_sec = static_cast<int>(time_pos) % 60;
 				int dur_min = static_cast<int>(duration) / 60;
 				int dur_sec = static_cast<int>(duration) % 60;
-				ImGui::Text("%d:%02d / %d:%02d", cur_min, cur_sec, dur_min, dur_sec);
+				char time_buf[32];
+				std::snprintf(time_buf, sizeof(time_buf), "%d:%02d / %d:%02d", cur_min, cur_sec, dur_min, dur_sec);
+				ImVec2 time_size = ImGui::CalcTextSize(time_buf);
 
-				ImGui::SameLine();
-				float seek_pos = (duration > 0) ? static_cast<float>(time_pos / duration) : 0.0f;
-				float seek_width = ImGui::GetContentRegionAvail().x - 120.0f;
-				if (seek_width < 50.0f) seek_width = 50.0f;
+				ImGui::SetCursorScreenPos(ImVec2(cx, cy));
+				ImGui::TextUnformatted(time_buf);
+				cx += time_size.x + bar_pad;
+
+				float right_controls_width = 80.0f;
+				float seek_width = (bar_max.x - bar_pad) - cx - right_controls_width;
+				if (seek_width < 40.0f) seek_width = 40.0f;
+
+				ImGui::SetCursorScreenPos(ImVec2(cx, bar_min.y + (bar_height - ImGui::GetFrameHeight()) * 0.5f));
 				ImGui::SetNextItemWidth(seek_width);
+				float seek_pos = (duration > 0) ? static_cast<float>(time_pos / duration) : 0.0f;
 				if (ImGui::SliderFloat("##seek", &seek_pos, 0.0f, 1.0f, "")) {
 					double new_pos = seek_pos * duration;
 					mpv_set_property(mpv_ctx, "time-pos", MPV_FORMAT_DOUBLE, &new_pos);
 				}
+				cx += seek_width + bar_pad;
 
-				ImGui::SameLine();
+				ImGui::SetCursorScreenPos(ImVec2(cx, cy));
 				float vol = static_cast<float>(volume);
-				ImGui::SetNextItemWidth(60.0f);
-				if (ImGui::SliderFloat("##vol", &vol, 0.0f, 100.0f, "%.0f%%")) {
+				ImGui::SetNextItemWidth(40.0f);
+				if (ImGui::SliderFloat("##vol", &vol, 0.0f, 100.0f, "")) {
 					double new_vol = static_cast<double>(vol);
 					mpv_set_property(mpv_ctx, "volume", MPV_FORMAT_DOUBLE, &new_vol);
 				}
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("Volume: %.0f%%", vol);
+				cx += 40.0f + bar_pad;
 
-				ImGui::SameLine();
-				if (ImGui::SmallButton("Stop"))
-					stop_video();
+				ImGui::SetCursorScreenPos(ImVec2(cx, cy));
+				if (ImGui::SmallButton("\xe2\x9b\xb6")) {
+					GLFWwindow* win = glfwGetCurrentContext();
+					if (win) {
+						GLFWmonitor* monitor = glfwGetWindowMonitor(win);
+						if (monitor) {
+							glfwSetWindowMonitor(win, nullptr, 100, 100, 1280, 720, 0);
+						} else {
+							monitor = glfwGetPrimaryMonitor();
+							const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+							glfwSetWindowMonitor(win, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+						}
+					}
+				}
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("Toggle Fullscreen");
+
 			} else if (poll_active) {
 				ImGui::TextUnformatted("Video is being processed, please wait...");
 			} else {
