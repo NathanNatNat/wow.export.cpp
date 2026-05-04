@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/39 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/44 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -196,3 +196,28 @@
   - **JS Source**: `src/js/components/model-viewer-gl.js` lines 255–256; `src/default_config.jsonc` lines 64, 83
   - **Status**: Pending
   - **Details**: `default_config.jsonc` sets both `modelViewerBackgroundColor` and `chrBackgroundColor` to `"#000000"`. C++ (model-viewer-gl.cpp L418–419) uses `"#343a40"` as the fallback for both keys. If the config JSON is missing these keys, C++ uses a dark grey background instead of black. Fix: change both fallbacks from `"#343a40"` to `"#000000"`.
+
+- [ ] 40. [legacy_tab_textures.cpp] `export_textures` passes `isLocal=true` instead of `false`
+  - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 170
+  - **Status**: Pending
+  - **Details**: JS calls `textureExporter.exportFiles(selected, false, -1, true)` — `isLocal=false`, `exportID=-1`, `isMPQ=true`. C++ (legacy_tab_textures.cpp L417) calls `texture_exporter::exportFiles(selected, nullptr, core::view->mpq.get(), true, -1)` — `isLocal=true`, `exportID=-1`. The `true` for `isLocal` causes three problems: (1) line 209 forces `overwriteFiles=true` regardless of user config, (2) line 231 skips `exportNamedFiles` renaming, (3) line 241 uses the raw MPQ filename as the export path without prepending the configured export directory. Fix: change `true` to `false` at legacy_tab_textures.cpp L417.
+
+- [ ] 41. [screen_source_select.cpp] CDN auto-selection for fastest region never works
+  - **JS Source**: `src/js/modules/screen_source_select.js` lines 219–249
+  - **Status**: Pending
+  - **Details**: JS sets `selectedCDNRegion` to the same `node` object reference that lives in the `regions` array. When pings complete and `node.delay = ms` is executed, it mutates the same object. By `Promise.all` time, `selected_region.delay` has a numeric value, so the fastest-region comparison works. C++ (screen_source_select.cpp L530) copies the JSON node into `selectedCDNRegion`. When pings update `regions[index]["delay"]` at L557, `selectedCDNRegion["delay"]` remains `null`. At L584, `selected_region["delay"].is_number()` fails because `delay` is null, so no region ever replaces the default. The "auto-select fastest CDN" feature is completely broken. Fix: when the initial `selected_region.delay` is null, treat any valid region with positive delay as better; or update `selectedCDNRegion["delay"]` when the corresponding region's ping completes.
+
+- [ ] 42. [screen_source_select.cpp] Missing "Visit Support Discord" action in CASC load error toasts
+  - **JS Source**: `src/js/modules/screen_source_select.js` lines 134–137
+  - **Status**: Pending
+  - **Details**: JS CASC load error toast has two actions: `'View Log'` and `'Visit Support Discord': () => ExternalLinks.open('::DISCORD')`. C++ (screen_source_select.cpp L314–317, L338–341) only has `'View Log'` in both the local and remote CASC load error paths. The "Visit Support Discord" button is missing from both. Fix: add `{"Visit Support Discord", []() { external_links::open("::DISCORD"); }}` to both toast action lists.
+
+- [ ] 43. [screen_settings.cpp] JS typo "manfiest" silently corrected to "manifest"
+  - **JS Source**: `src/js/modules/screen_settings.js` line 445
+  - **Status**: Pending
+  - **Details**: JS has `'A valid URL is required for DBD manfiest.'` (typo: "manfiest"). C++ (screen_settings.cpp L705) has `"A valid URL is required for DBD manifest."` (corrected: "manifest"). Per CLAUDE.md rules ("Do not 'fix' perceived JS bugs"), the C++ should reproduce the exact typo. Fix: change "manifest" back to "manfiest" at screen_settings.cpp L705.
+
+- [ ] 44. [legacy_tab_fonts.cpp] `get_font_id` has undefined behavior when hash equals `0x80000000`
+  - **JS Source**: `src/js/modules/legacy_tab_fonts.js` lines 12–15
+  - **Status**: Pending
+  - **Details**: JS `get_font_id` computes `hash = ((hash << 5) - hash + charCode) | 0` (signed 32-bit coercion) then returns `'font_legacy_' + Math.abs(hash)`. `Math.abs(-2147483648)` safely returns `2147483648` (float64). C++ (legacy_tab_fonts.cpp L38) does `std::to_string(std::abs(static_cast<int32_t>(hash)))`. If `hash` is exactly `0x80000000`, `static_cast<int32_t>` gives `INT32_MIN` and `std::abs(INT32_MIN)` is undefined behavior in C++ (positive value overflows int32_t). On most implementations it returns `-2147483648`, producing `"font_legacy_-2147483648"` instead of JS's `"font_legacy_2147483648"`. Fix: use `static_cast<int64_t>(static_cast<int32_t>(hash))` before `std::abs`, or special-case `0x80000000`.
