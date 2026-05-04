@@ -1715,7 +1715,7 @@ static void setTaskbarProgress(GLFWwindow* window, double val) {
 	if (!hwnd)
 		return;
 
-	if (val < 0 || val >= 1.0) {
+	if (val < 0) {
 		s_taskbar->SetProgressState(hwnd, TBPF_NOPROGRESS);
 	} else {
 		s_taskbar->SetProgressState(hwnd, TBPF_NORMAL);

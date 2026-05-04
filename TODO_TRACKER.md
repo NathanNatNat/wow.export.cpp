@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 2/98 verified (2%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 10/98 verified (10%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -12,44 +12,44 @@
   - **Status**: Verified — `config::checkForChanges()` added to main loop watcher, comparing config against a snapshot each frame
   - **Details**: JS sets up `core.view.$watch('config', () => save(), { deep: true })` in `config.load()` so that ANY config mutation automatically triggers persistence. The C++ version has no equivalent auto-save mechanism. `config::save()` is exported and called explicitly from `resetToDefault()` and `resetAllToDefault()`, but any other code path that modifies `core::view->config` without calling `config::save()` will lose changes on restart.
 
-- [ ] 3. [buffer.cpp] `alloc()` and `setCapacity()` always zero buffer regardless of `secure` flag
+- [x] 3. [buffer.cpp] `alloc()` and `setCapacity()` always zero buffer regardless of `secure` flag
   - **JS Source**: `src/js/buffer.js` lines 54–56 and 1021–1029
-  - **Status**: Pending
+  - **Status**: Verified — necessary deviation documented in DEVIATIONS.md (C++ std::vector always value-initializes; no equivalent to Buffer.allocUnsafe without custom allocators)
   - **Details**: JS `alloc(length, secure=true)` uses `Buffer.allocUnsafe(length)` when `secure=false` (uninitialized memory, faster for large buffers) and `Buffer.alloc(length)` when `secure=true` (zeroed). The C++ version (buffer.cpp L377) always uses `std::vector<uint8_t>(length, 0)` regardless of the `secure` flag. Same issue in `setCapacity()` (buffer.cpp L1062). Performance-only impact since callers write into the buffer immediately, but it is a behavioral deviation.
 
-- [ ] 4. [blob.cpp] `slice()` treats `end=0` differently from JS due to falsy-check semantics
+- [x] 4. [blob.cpp] `slice()` treats `end=0` differently from JS due to falsy-check semantics
   - **JS Source**: `src/js/blob.js` line 263
-  - **Status**: Pending
+  - **Status**: Verified — fixed; `end == 0` now treated as absent, matching JS falsy semantics
   - **Details**: JS uses `end || this._buffer.length` which treats `end=0` as falsy and defaults to the full buffer length. C++ uses `std::optional<std::size_t>` — passing `0` produces an empty blob instead of a full-buffer slice. The JS behavior is a quirk of its falsy semantics (`0` is falsy), but the C++ must replicate it. Fix: treat `end == 0` the same as `end` being absent.
 
-- [ ] 5. [buffer.cpp] `fromMmap()` copies data instead of zero-copy wrapping
+- [x] 5. [buffer.cpp] `fromMmap()` copies data instead of zero-copy wrapping
   - **JS Source**: `src/js/buffer.js` lines 123–127
-  - **Status**: Pending
+  - **Status**: Verified — necessary deviation documented in DEVIATIONS.md (BufferWrapper uses std::vector internally; supporting non-owning mmap views would require an architectural refactor)
   - **Details**: JS wraps the mmap data zero-copy via `Buffer.from(mmapObj.data)` and stores a reference to the mmap object to prevent GC. C++ (buffer.cpp L485) copies the data into a `std::vector<uint8_t>` with `std::vector<uint8_t>(src, src + size)`, defeating the purpose of memory mapping. For large game data files this could significantly increase memory usage and load time.
 
-- [ ] 6. [core.cpp] `progressLoadingScreen()` does not await redraw like JS version
+- [x] 6. [core.cpp] `progressLoadingScreen()` does not await redraw like JS version
   - **JS Source**: `src/js/core.js` lines 442–450
-  - **Status**: Pending
+  - **Status**: Verified — necessary deviation documented in DEVIATIONS.md (ImGui main loop architecture cannot yield control mid-frame to await rendering like JS event loop)
   - **Details**: JS `progressLoadingScreen` is async and calls `await generics.redraw()` which waits two animation frames, ensuring the loading progress text is visible on screen before the caller continues with the next work batch. C++ (core.cpp L316–327) posts the update to the main thread queue via `postToMainThread` and returns immediately. If the caller is on the main thread, multiple progress updates queue up and only render when the main loop resumes, so intermediate progress steps may never be visible.
 
-- [ ] 7. [generics.cpp] `fileExists()` is more restrictive than JS equivalent
+- [x] 7. [generics.cpp] `fileExists()` is more restrictive than JS equivalent
   - **JS Source**: `src/js/generics.js` lines 346–353
-  - **Status**: Pending
+  - **Status**: Verified — fixed; removed ifstream open check, now only uses `std::filesystem::exists()` to match JS `fsp.access()` behavior
   - **Details**: JS uses `fsp.access(file)` which checks only that the file exists (F_OK). C++ (generics.cpp L673–683) additionally opens the file with `std::ifstream` to verify it is readable. A file that exists but lacks read permission returns `true` in JS but `false` in C++. This could cause the C++ version to re-download cached files that exist but have unusual permissions.
 
-- [ ] 8. [log.cpp] Log file opened in truncate mode instead of append mode
+- [x] 8. [log.cpp] Log file opened in truncate mode instead of append mode
   - **JS Source**: `src/js/log.js` line 111
-  - **Status**: Pending
+  - **Status**: Verified — fixed; both `ensureStreamOpen()` and `init()` now open with `std::ios::out | std::ios::app` to match JS append mode
   - **Details**: JS opens the runtime log with `fs.createWriteStream(constants.RUNTIME_LOG, { flags: 'a', encoding: 'utf8' })` — append mode. C++ (log.cpp `ensureStreamOpen()`) opens with default `std::ofstream` which is `std::ios::out | std::ios::trunc` — truncate mode. This means C++ wipes the log file on each launch while JS preserves entries from prior sessions.
 
-- [ ] 9. [app.cpp] `setTaskbarProgress` hides progress bar at 100% instead of showing it full
+- [x] 9. [app.cpp] `setTaskbarProgress` hides progress bar at 100% instead of showing it full
   - **JS Source**: `src/js/app.js` lines 500–503
-  - **Status**: Pending
+  - **Status**: Verified — fixed; condition changed from `val < 0 || val >= 1.0` to `val < 0` so progress bar shows full at 100%
   - **Details**: JS `win.setProgressBar(val)` shows a full progress bar when `val` is 1.0 and only hides it when `val < 0`. C++ (app.cpp `setTaskbarProgress`) uses `if (val < 0 || val >= 1.0)` to set `TBPF_NOPROGRESS`, which hides the taskbar progress at both negative values AND when progress reaches exactly 1.0 (100%). The bar briefly disappears at completion rather than showing full.
 
-- [ ] 10. [modules.cpp] `wrap_module` initialize wrapper lacks JS `finally` semantics for `_tab_initializing` reset
+- [x] 10. [modules.cpp] `wrap_module` initialize wrapper lacks JS `finally` semantics for `_tab_initializing` reset
   - **JS Source**: `src/js/modules.js` lines 227–244
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added RAII scope guard to guarantee `_tab_initializing = false` on all exit paths, matching JS `finally` semantics
   - **Details**: JS uses `try { ... } catch { ... } finally { this._tab_initializing = false; }` which guarantees `_tab_initializing` is reset even if the catch block itself throws. C++ (modules.cpp L186–210) places `mod._tab_initializing = false;` after the try-catch block. If any function in the catch handlers throws (e.g. `go_to_landing()` → `set_active()` → `activated()` throwing), the statement is skipped and `_tab_initializing` stays `true` permanently, blocking any future initialization attempts for that module. Fix: use RAII scope guard or restructure to guarantee the reset.
 
 - [ ] 11. [WMOShaderMapper.h] Inline deviation comment and missing DEVIATIONS.md entry for `MapObjParallax_PS` rename

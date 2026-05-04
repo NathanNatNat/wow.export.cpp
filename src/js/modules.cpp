@@ -188,6 +188,8 @@ static void wrap_module(ModuleDef& mod) {
 				return;
 
 			mod._tab_initializing = true;
+			auto guard = [&mod]() noexcept { mod._tab_initializing = false; };
+			struct ScopeGuard { decltype(guard) fn; ~ScopeGuard() { fn(); } } scope_guard{guard};
 
 			try {
 				original_initialize();
@@ -205,8 +207,6 @@ static void wrap_module(ModuleDef& mod) {
 				               { {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
 				go_to_landing();
 			}
-
-			mod._tab_initializing = false;
 		};
 
 		auto original_activated = mod.activated;

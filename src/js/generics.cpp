@@ -672,11 +672,7 @@ std::string getFileHash(const std::filesystem::path& file, std::string_view meth
  */
 bool fileExists(const std::filesystem::path& file) {
 	try {
-		if (!std::filesystem::exists(file))
-			return false;
-
-		std::ifstream ifs(file, std::ios::binary);
-		return ifs.is_open();
+		return std::filesystem::exists(file);
 	} catch (const std::exception&) {
 		return false;
 	}

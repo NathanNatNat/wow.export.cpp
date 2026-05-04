@@ -229,7 +229,7 @@ std::string BlobPolyfill::text() const {
 BlobPolyfill BlobPolyfill::slice(std::size_t start,
                                  std::optional<std::size_t> end,
                                  const std::string& type) const {
-	std::size_t actual_end = end.has_value() ? end.value() : _buffer.size();
+	std::size_t actual_end = (end.has_value() && end.value() != 0) ? end.value() : _buffer.size();
 	if (actual_end > _buffer.size())
 		actual_end = _buffer.size();
 	if (start > actual_end)

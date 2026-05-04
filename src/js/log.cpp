@@ -45,7 +45,7 @@ std::mutex logMutex;
 
 void ensureStreamOpen() {
 	if (!streamInitialized) {
-		stream.open(constants::RUNTIME_LOG().string());
+		stream.open(constants::RUNTIME_LOG().string(), std::ios::out | std::ios::app);
 		streamInitialized = true;
 	}
 }
@@ -108,7 +108,7 @@ void init() {
 	std::lock_guard<std::mutex> lock(logMutex);
 	// Initialize the logging stream.
 	if (!streamInitialized) {
-		stream.open(constants::RUNTIME_LOG().string());
+		stream.open(constants::RUNTIME_LOG().string(), std::ios::out | std::ios::app);
 		streamInitialized = true;
 	}
 }
