@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/58 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/64 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -291,3 +291,33 @@
   - **JS Source**: `src/js/modules/tab_text.js` lines 124–143
   - **Status**: Pending
   - **Details**: JS `mounted()` watcher checks `!this.$core.view.isBusy` before starting a preview load, but does NOT increment `isBusy` itself. C++ `preview_text()` (tab_text.cpp L59) creates a `BusyLock` via `core::create_busy_lock()` stored in `PendingTextPreview.busy_lock`, which increments `isBusy` until the preview completes. This prevents the user from clicking "Export Selected" while a text file preview is loading — behavior the JS allows. Fix: remove the `busy_lock` member from `PendingTextPreview` and the `create_busy_lock()` call at L59.
+
+- [ ] 59. [tab_audio.cpp] `format_time()` truncates seconds instead of rounding
+  - **JS Source**: `src/js/modules/tab_audio.js` lines 207–209 (computed properties using `generics.formatPlaybackSeconds`)
+  - **Status**: Pending
+  - **Details**: JS uses `generics.formatPlaybackSeconds()` which calls `Math.round(seconds % 60)` for the seconds component. C++ tab_audio.cpp defines a local `format_time()` (L320–328) that uses `static_cast<int>(seconds)` which truncates instead of rounding. The C++ already has a correct `generics::formatPlaybackSeconds()` (generics.cpp L804) using `std::round`. Fix: replace the local `format_time()` calls with `generics::formatPlaybackSeconds()`.
+
+- [ ] 60. [tab_data.cpp] Status bar unit type is "table" instead of "db2 file"
+  - **JS Source**: `src/js/modules/tab_data.js` line 99
+  - **Status**: Pending
+  - **Details**: JS Listbox has `unittype="db2 file"` which produces a status bar reading "X db2 files found". C++ (tab_data.cpp L284) calls `listbox::renderStatusBar("table", {}, listbox_db2_state)` producing "X tables found". Fix: change `"table"` to `"db2 file"`.
+
+- [ ] 61. [tab_fonts.cpp] Glyph grid not rendered in loaded font
+  - **JS Source**: `src/js/modules/tab_fonts.js` line 154 (JS `detect_glyphs_async` sets `cell.style.fontFamily`)
+  - **Status**: Pending
+  - **Details**: JS renders each glyph cell using the loaded game font (`fontFamily = "font_id", monospace`), so users see the actual glyphs from the game font file. C++ (tab_fonts.cpp L284–313) renders the glyph grid without calling `ImGui::PushFont(loaded_font)`, so glyphs appear in the default ImGui font. Characters not present in the default font render as rectangles. Fix: push the loaded ImFont* before rendering the grid and pop it afterwards.
+
+- [ ] 62. [tab_item_sets.cpp] Missing `BeginTab`/`EndTab` wrapper
+  - **JS Source**: `src/js/modules/tab_item_sets.js` line 77 (`<div class="tab" id="tab-item-sets">`)
+  - **Status**: Pending
+  - **Details**: Every other tab in the C++ codebase uses `app::layout::BeginTab("tab-xxx")` / `app::layout::EndTab()` to wrap content in a properly configured child window with consistent padding and scroll behavior. `tab_item_sets::render()` skips this and uses `ImGui::BeginChild` directly. Fix: wrap render content in `BeginTab`/`EndTab`.
+
+- [ ] 63. [tab_items.cpp] Item cache invalidation based only on vector size
+  - **JS Source**: `src/js/modules/tab_items.js` lines 148–153 (reactivity-based updates)
+  - **Status**: Pending
+  - **Details**: C++ (tab_items.cpp L611) only rebuilds the item string cache when `view.listfileItems.size() != s_item_entries_cache_size`. If a filter change produces a different set of items with the same count, the cache shows stale entries. JS uses Vue reactivity which always re-renders when the array reference changes. Fix: use a generation counter that increments in `apply_filters()` instead of comparing sizes.
+
+- [ ] 64. [tab_text.cpp] Missing `ImGui::SameLine()` between regex label and filter input
+  - **JS Source**: `src/js/modules/tab_text.js` lines 30–33
+  - **Status**: Pending
+  - **Details**: JS renders "Regex Enabled" text and the filter input on the same line (siblings in a flex div). C++ (tab_text.cpp L193–204) renders them without `ImGui::SameLine()` between them, causing the filter input to appear below the regex label when regex is enabled. Other tabs like `tab_raw.cpp` (L383) correctly include `SameLine()`. Fix: add `ImGui::SameLine()` after the regex tooltip check, before `ImGui::SetNextItemWidth`.
