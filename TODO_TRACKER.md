@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 60/98 verified (61%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 70/98 verified (71%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -302,54 +302,54 @@
   - **Status**: Verified — fixed; changed `"table"` to `"db2 file"` in `listbox::renderStatusBar()` call
   - **Details**: JS Listbox has `unittype="db2 file"` which produces a status bar reading "X db2 files found". C++ (tab_data.cpp L284) calls `listbox::renderStatusBar("table", {}, listbox_db2_state)` producing "X tables found". Fix: change `"table"` to `"db2 file"`.
 
-- [ ] 61. [tab_fonts.cpp] Glyph grid not rendered in loaded font
+- [x] 61. [tab_fonts.cpp] Glyph grid not rendered in loaded font
   - **JS Source**: `src/js/modules/tab_fonts.js` line 154 (JS `detect_glyphs_async` sets `cell.style.fontFamily`)
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `ImGui::PushFont(loaded_font)` before glyph grid rendering and `ImGui::PopFont()` after, using the same `loaded_fonts` lookup as the preview text area
   - **Details**: JS renders each glyph cell using the loaded game font (`fontFamily = "font_id", monospace`), so users see the actual glyphs from the game font file. C++ (tab_fonts.cpp L284–313) renders the glyph grid without calling `ImGui::PushFont(loaded_font)`, so glyphs appear in the default ImGui font. Characters not present in the default font render as rectangles. Fix: push the loaded ImFont* before rendering the grid and pop it afterwards.
 
-- [ ] 62. [tab_item_sets.cpp] Missing `BeginTab`/`EndTab` wrapper
+- [x] 62. [tab_item_sets.cpp] Missing `BeginTab`/`EndTab` wrapper
   - **JS Source**: `src/js/modules/tab_item_sets.js` line 77 (`<div class="tab" id="tab-item-sets">`)
-  - **Status**: Pending
+  - **Status**: Verified — fixed; wrapped render content in `app::layout::BeginTab("tab-item-sets")` / `app::layout::EndTab()`, added `#include "../../app.h"`
   - **Details**: Every other tab in the C++ codebase uses `app::layout::BeginTab("tab-xxx")` / `app::layout::EndTab()` to wrap content in a properly configured child window with consistent padding and scroll behavior. `tab_item_sets::render()` skips this and uses `ImGui::BeginChild` directly. Fix: wrap render content in `BeginTab`/`EndTab`.
 
-- [ ] 63. [tab_items.cpp] Item cache invalidation based only on vector size
+- [x] 63. [tab_items.cpp] Item cache invalidation based only on vector size
   - **JS Source**: `src/js/modules/tab_items.js` lines 148–153 (reactivity-based updates)
-  - **Status**: Pending
+  - **Status**: Verified — fixed; replaced size-based comparison with `s_filter_generation` counter incremented in `apply_filters()`, compared against `s_item_entries_cache_generation` in render
   - **Details**: C++ (tab_items.cpp L611) only rebuilds the item string cache when `view.listfileItems.size() != s_item_entries_cache_size`. If a filter change produces a different set of items with the same count, the cache shows stale entries. JS uses Vue reactivity which always re-renders when the array reference changes. Fix: use a generation counter that increments in `apply_filters()` instead of comparing sizes.
 
-- [ ] 64. [tab_text.cpp] Missing `ImGui::SameLine()` between regex label and filter input
+- [x] 64. [tab_text.cpp] Missing `ImGui::SameLine()` between regex label and filter input
   - **JS Source**: `src/js/modules/tab_text.js` lines 30–33
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `ImGui::SameLine()` after the regex tooltip check, before `ImGui::SetNextItemWidth`
   - **Details**: JS renders "Regex Enabled" text and the filter input on the same line (siblings in a flex div). C++ (tab_text.cpp L193–204) renders them without `ImGui::SameLine()` between them, causing the filter input to appear below the regex label when regex is enabled. Other tabs like `tab_raw.cpp` (L383) correctly include `SameLine()`. Fix: add `ImGui::SameLine()` after the regex tooltip check, before `ImGui::SetNextItemWidth`.
 
-- [ ] 65. [tab_fonts.cpp] Missing `ImGui::SameLine()` between regex label and filter input
+- [x] 65. [tab_fonts.cpp] Missing `ImGui::SameLine()` between regex label and filter input
   - **JS Source**: `src/js/modules/tab_fonts.js` lines 60–62
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `ImGui::SameLine()` after the regex tooltip check, before `ImGui::SetNextItemWidth`
   - **Details**: Same issue as #64 but in tab_fonts.cpp. Lines 268–274 render "Regex Enabled" text and tooltip but do not call `ImGui::SameLine()` before the filter input (L274). Both `tab_audio.cpp` (L529) and `tab_data.cpp` (L292) correctly include `SameLine()` in the same pattern. Fix: add `ImGui::SameLine()` after the tooltip check on L271, before `ImGui::SetNextItemWidth`.
 
-- [ ] 66. [tab_creatures.cpp] Missing stack trace in `helper.mark()` export catch blocks
+- [x] 66. [tab_creatures.cpp] Missing stack trace in `helper.mark()` export catch blocks
   - **JS Source**: `src/js/modules/tab_creatures.js` lines 933, 973
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `build_stack_trace` helper function and updated both catch blocks to pass `build_stack_trace("export_files", e)` as 4th argument
   - **Details**: Both catch blocks in `export_files` (tab_creatures.cpp L1348 and L1396) pass only `e.what()` to `helper.mark()` without a stack trace: `helper.mark(creature_name, false, e.what())`. JS passes both `e.message` and `e.stack` as separate arguments. Other tabs (tab_decor L289, tab_models L811) correctly pass `build_stack_trace("export_files", e)` as the 4th argument. The tab_creatures file is also missing the `build_stack_trace` helper entirely. Fix: add `build_stack_trace` and update both catch blocks to `helper.mark(creature_name, false, e.what(), build_stack_trace("export_files", e))`.
 
-- [ ] 67. [tab_maps.cpp] Game objects filter uses swapped tile_x/tile_y for bounds calculation
+- [x] 67. [tab_maps.cpp] Game objects filter uses swapped tile_x/tile_y for bounds calculation
   - **JS Source**: `src/js/modules/tab_maps.js` lines 799–802
-  - **Status**: Pending
+  - **Status**: Verified — fixed; swapped definitions to `tile_x = index % MAP_SIZE` (column) and `tile_y = index / MAP_SIZE` (row), matching JS tileX/tileY semantics
   - **Details**: JS uses `adt.tileX` (= tileIndex % MAP_SIZE, the column) for `start_x` and `adt.tileY` (= tileIndex / MAP_SIZE, the row) for `start_y`. C++ `pump_map_export()` at L1083–1090 defines `tile_x = index / MAP_SIZE` (row) and `tile_y = index % MAP_SIZE` (col), then uses `tile_x` for `start_x` and `tile_y` for `start_y`. This swaps the x/y axes, causing game objects to be filtered against the wrong tile region. Fix: swap the definitions so `tile_x = index % MAP_SIZE` and `tile_y = index / MAP_SIZE`, OR rename them to match the ADTExporter semantics and swap their usage in the bounds calculation.
 
-- [ ] 68. [tab_maps.cpp] `extract_height_data_from_tile` builds wrong ADT file path due to parameter order
+- [x] 68. [tab_maps.cpp] `extract_height_data_from_tile` builds wrong ADT file path due to parameter order
   - **JS Source**: `src/js/modules/tab_maps.js` lines 209–210
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed tile_prefix from `tile_y + '_' + tile_x` to `tile_x + '_' + tile_y`, matching JS `tileY + '_' + tileX` order (tile_x=row from call sites)
   - **Details**: JS builds `tile_prefix = prefix + '_' + adt.tileY + '_' + adt.tileX` where tileY = index/MAP_SIZE (row) and tileX = index%MAP_SIZE (col), producing `prefix_row_col.adt`. C++ (L480) builds `tile_prefix = prefix + '_' + tile_y + '_' + tile_x` where the parameters received are tile_x = index/MAP_SIZE (row) and tile_y = index%MAP_SIZE (col) from the call sites (L1348, L1400). This produces `prefix_col_row.adt` instead of `prefix_row_col.adt`, referencing non-existent files. Fix: change L480 to `prefix + '_' + std::to_string(tile_x) + '_' + std::to_string(tile_y)` (since tile_x=row comes first in the WoW file naming convention), which matches the JS's `tileY + '_' + tileX` order.
 
-- [ ] 69. [tab_blender.cpp] `parse_manifest_version` preserves leading zeros in version components
+- [x] 69. [tab_blender.cpp] `parse_manifest_version` preserves leading zeros in version components
   - **JS Source**: `src/js/modules/tab_blender.js` line 18
-  - **Status**: Pending
+  - **Status**: Verified — fixed; applied `std::stoi()` to each capture group before formatting, stripping leading zeros to match JS `%d` coercion
   - **Details**: JS uses `util.format('%d.%d.%d', match[1], match[2], match[3])` where `%d` coerces captured regex groups to integers, stripping leading zeros (e.g., "01","02","03" → "1.2.3"). C++ (tab_blender.cpp L49) uses `std::format("{}.{}.{}", match[1].str(), match[2].str(), match[3].str())` which preserves raw capture strings (→ "01.02.03"). This could cause the version comparison `latestAddonVersion.version > blenderAddonVersion.version` to produce wrong results if versions contain leading zeros. Fix: use `std::stoi` on each capture group.
 
-- [ ] 70. [tab_blender.cpp] `std::stod` parses trailing-alpha Blender versions differently from JS `Number()`
+- [x] 70. [tab_blender.cpp] `std::stod` parses trailing-alpha Blender versions differently from JS `Number()`
   - **JS Source**: `src/js/modules/tab_blender.js` lines 91, 139
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `size_t stod_pos` output parameter check to verify entire string was consumed, skipping versions with trailing non-numeric characters
   - **Details**: The `PATTERN_BLENDER_VER` regex matches versions like "3.0a" (trailing `\w?`). In JS, `"3.0a" >= 2.8` coerces the string via `Number("3.0a")` → `NaN`, and `NaN >= 2.8` is `false`, so alpha/beta builds are skipped. In C++ (tab_blender.cpp L133, L231), `std::stod("3.0a")` successfully parses "3.0" (stops at 'a'), yielding 3.0, and `3.0 >= 2.8` is `true`, so alpha builds are included in the addon installation. Fix: after `std::stod`, verify the entire string was consumed by checking the `pos` output parameter equals the string length, and skip the version if it wasn't.
 
 - [ ] 71. [tab_creatures.cpp, tab_decor.cpp] Sorting uses byte-comparison instead of locale-aware `localeCompare`

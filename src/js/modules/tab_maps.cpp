@@ -459,7 +459,7 @@ static std::optional<HeightData> extract_height_data_from_tile(
 const std::string& map_dir, uint32_t tile_x, uint32_t tile_y, int resolution)
 {
 const std::string prefix = std::format("world/maps/{}/{}", map_dir, map_dir);
-const std::string tile_prefix = prefix + '_' + std::to_string(tile_y) + '_' + std::to_string(tile_x);
+const std::string tile_prefix = prefix + '_' + std::to_string(tile_x) + '_' + std::to_string(tile_y);
 
 try {
 auto root_fid = casc::listfile::getByFilename(tile_prefix + ".adt");
@@ -1062,8 +1062,8 @@ static void pump_map_export() {
 	ADTExporter adt(selected_map_id.value_or(0), selected_map_dir, static_cast<uint32_t>(index));
 
 	if (task.format == MapExportFormat::OBJ) {
-		uint32_t tile_x = static_cast<uint32_t>(index) / constants::GAME::MAP_SIZE;
-		uint32_t tile_y = static_cast<uint32_t>(index) % constants::GAME::MAP_SIZE;
+		uint32_t tile_x = static_cast<uint32_t>(index) % constants::GAME::MAP_SIZE;
+		uint32_t tile_y = static_cast<uint32_t>(index) / constants::GAME::MAP_SIZE;
 
 		std::vector<ADTGameObject> game_objects_vec;
 

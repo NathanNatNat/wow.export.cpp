@@ -160,7 +160,8 @@ static context_menu::ContextMenuState context_menu_item_state;
 static itemlistbox::ItemListboxState itemlistbox_items_state;
 
 static std::vector<itemlistbox::ItemEntry> s_item_entries_cache;
-static size_t s_item_entries_cache_size = ~size_t(0);
+static size_t s_item_entries_cache_generation = ~size_t(0);
+static size_t s_filter_generation = 0;
 
 static void view_item_models(const Item& item) {
 	modules::set_active("tab_models");
@@ -422,6 +423,8 @@ static void apply_filters() {
 	view.config["itemViewerEnabledTypes"] = enabled_types;
 
 	view.config["itemViewerEnabledQualities"] = quality_mask;
+
+	++s_filter_generation;
 }
 
 static const Item* find_item_by_id(uint32_t item_id) {
@@ -608,10 +611,10 @@ void render() {
 		ImVec2(listW - app::layout::LIST_MARGIN_LEFT - app::layout::LIST_MARGIN_RIGHT,
 		       topH - app::layout::LIST_MARGIN_TOP));
 	{
-		if (view.listfileItems.size() != s_item_entries_cache_size) {
-			s_item_entries_cache_size = view.listfileItems.size();
+		if (s_filter_generation != s_item_entries_cache_generation) {
+			s_item_entries_cache_generation = s_filter_generation;
 			s_item_entries_cache.clear();
-			s_item_entries_cache.reserve(s_item_entries_cache_size);
+			s_item_entries_cache.reserve(view.listfileItems.size());
 			for (const auto& j : view.listfileItems) {
 				itemlistbox::ItemEntry entry;
 				entry.id = j.value("id", 0);

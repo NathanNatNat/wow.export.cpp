@@ -269,6 +269,7 @@ void render() {
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+			ImGui::SameLine();
 		}
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
@@ -280,6 +281,15 @@ void render() {
 	app::layout::EndFilterBar();
 
 	if (app::layout::BeginPreviewContainer("fonts-preview-container", regions)) {
+		void* grid_font = nullptr;
+		{
+			auto fit = loaded_fonts.find(view.fontPreviewFontFamily);
+			if (fit != loaded_fonts.end())
+				grid_font = fit->second;
+		}
+		if (grid_font)
+			ImGui::PushFont(static_cast<ImFont*>(grid_font));
+
 		const float gridHeight = std::max(50.0f, ImGui::GetContentRegionAvail().y - 140.0f);
 		ImGui::BeginChild("font-character-grid", ImVec2(0, gridHeight), ImGuiChildFlags_Borders);
 
@@ -312,6 +322,9 @@ void render() {
 		ImGui::NewLine();
 		ImGui::PopStyleVar();
 		ImGui::EndChild();
+
+		if (grid_font)
+			ImGui::PopFont();
 
 		const float previewInputHeight = std::min(120.0f, ImGui::GetContentRegionAvail().y);
 

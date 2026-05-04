@@ -26,6 +26,8 @@
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 
+#include "../../app.h"
+
 namespace tab_item_sets {
 
 struct ItemSet {
@@ -243,6 +245,8 @@ void render() {
 	if (!is_initialized)
 		return;
 
+	if (app::layout::BeginTab("tab-item-sets")) {
+
 	ImGui::BeginChild("item-sets-list-container", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), ImGuiChildFlags_Borders);
 
 	{
@@ -309,6 +313,9 @@ void render() {
 	ImGui::SetNextItemWidth(inputWidth);
 	if (ImGui::InputTextWithHint("##FilterItemSets", "Filter item sets...", filter_buf, sizeof(filter_buf)))
 		view.userInputFilterItemSets = filter_buf;
+
+	} // if BeginTab
+	app::layout::EndTab();
 }
 
 } // namespace tab_item_sets

@@ -53,6 +53,7 @@
 #include <filesystem>
 #include <format>
 #include <map>
+#include <optional>
 #include <memory>
 #include <optional>
 #include <regex>
@@ -65,6 +66,10 @@
 #include <spdlog/spdlog.h>
 
 namespace tab_creatures {
+
+static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
+	return std::format("{}: {}", function_name, e.what());
+}
 
 struct EquipmentModelEntry {
 	struct RendererInfo {
@@ -1345,7 +1350,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 					helper.mark(mark_file_name, true);
 				}
 			} catch (const std::exception& e) {
-				helper.mark(creature_name, false, e.what());
+				helper.mark(creature_name, false, e.what(), build_stack_trace("export_files", e));
 			}
 
 			continue;
@@ -1393,7 +1398,7 @@ static void export_files(const std::vector<const db::caches::DBCreatureList::Cre
 
 			helper.mark(mark_name, true);
 		} catch (const std::exception& e) {
-			helper.mark(creature_name, false, e.what());
+			helper.mark(creature_name, false, e.what(), build_stack_trace("export_files", e));
 		}
 	}
 

@@ -193,6 +193,7 @@ void render() {
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+			ImGui::SameLine();
 		}
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);

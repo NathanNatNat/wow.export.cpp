@@ -46,7 +46,7 @@ static ManifestResult parse_manifest_version(const std::filesystem::path& file) 
 
 		std::smatch match;
 		if (std::regex_search(data, match, PATTERN_ADDON_VER))
-			return { std::format("{}.{}.{}", match[1].str(), match[2].str(), match[3].str()), "", "" };
+			return { std::format("{}.{}.{}", std::stoi(match[1].str()), std::stoi(match[2].str()), std::stoi(match[3].str())), "", "" };
 
 		return { "", "version_pattern_mismatch", "" };
 	} catch (const std::exception& e) {
@@ -130,7 +130,9 @@ static void start_automatic_install() {
 
 		for (const auto& version : versions) {
 			double ver_num = 0;
-			try { ver_num = std::stod(version); } catch (...) { continue; }
+			size_t stod_pos = 0;
+			try { ver_num = std::stod(version, &stod_pos); } catch (...) { continue; }
+			if (stod_pos != version.size()) continue;
 
 			if (ver_num >= constants::BLENDER::MIN_VER) {
 				const fs::path addon_path = constants::BLENDER::DIR() / version / std::string(constants::BLENDER::ADDON_DIR);
@@ -228,8 +230,9 @@ void checkLocalVersion() {
 	const std::string blenderVersion = sortedVersions.back();
 
 	double verNum = 0;
-	try { verNum = std::stod(blenderVersion); } catch (...) {}
-	if (verNum < constants::BLENDER::MIN_VER) {
+	size_t stod_pos = 0;
+	try { verNum = std::stod(blenderVersion, &stod_pos); } catch (...) {}
+	if (stod_pos != blenderVersion.size() || verNum < constants::BLENDER::MIN_VER) {
 		logging::write(std::format("Latest Blender install does not meet minimum requirements ({} < {})",
 			blenderVersion, constants::BLENDER::MIN_VER));
 		return;
