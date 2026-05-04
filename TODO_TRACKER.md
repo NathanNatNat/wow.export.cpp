@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/52 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/54 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -261,3 +261,13 @@
   - **JS Source**: `src/js/modules/legacy_tab_data.js` line 164
   - **Status**: Pending
   - **Details**: JS MenuButton has `class="upward"` which makes the dropdown open upward (important since it's in the bottom tray). C++ (legacy_tab_data.cpp L421–425) calls the `menu_button::render` overload without the `upward` parameter, defaulting to `false` (downward). The full overload with explicit `upward` is available (menu-button.h L55–60). Fix: use the full render overload and pass `true` for the `upward` parameter.
+
+- [ ] 53. [legacy_tab_data.cpp] `load_table` catch block missing stack trace log line
+  - **JS Source**: `src/js/modules/legacy_tab_data.js` lines 112–113
+  - **Status**: Pending
+  - **Details**: JS `load_table` catch block has two log calls: `log.write('Failed to open DBC file: %s', e.message)` and `log.write('%o', e.stack)`. C++ (legacy_tab_data.cpp L207) only logs the error message, omitting the stack trace entirely. While C++ exceptions lack a `.stack` property, the second log line should still be present — either logging a placeholder or using platform-specific stack capture. Fix: add a second `logging::write` call after L207 to log the exception context, matching the JS two-line pattern.
+
+- [ ] 54. [legacy_tab_textures.cpp] Listbox and status bar add quickfilters not present in JS
+  - **JS Source**: `src/js/modules/legacy_tab_textures.js` line 117
+  - **Status**: Pending
+  - **Details**: JS Listbox for the legacy textures tab has no quickfilters prop — no quick filter links appear in the status bar. C++ (legacy_tab_textures.cpp L269) passes `{".blp", ".png", ".jpg"}` as quickfilters to `listbox::render()`, and L309 passes the same to `listbox::renderStatusBar()`. This adds "Quick filter: BLP / PNG / JPG" links to the status bar that are absent from the original JS application. Fix: change both to empty vectors `{}` to match JS.
