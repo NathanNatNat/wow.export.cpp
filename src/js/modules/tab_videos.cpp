@@ -44,6 +44,12 @@
 #include <nlohmann/json.hpp>
 #include <httplib.h>
 
+#include <mpv/client.h>
+#include <mpv/render.h>
+#include <mpv/render_gl.h>
+#include <glad/gl.h>
+#include <GLFW/glfw3.h>
+
 namespace tab_videos {
 
 static std::optional<std::string> build_stack_trace(const char* function_name, const std::exception& e) {
@@ -103,6 +109,14 @@ static menu_button::MenuButtonState menu_button_videos_state;
 static std::unique_ptr<std::jthread> kino_processing_thread;
 static std::unique_ptr<std::jthread> export_selected_thread;
 
+static mpv_handle* mpv_ctx = nullptr;
+static mpv_render_context* mpv_render_ctx = nullptr;
+static GLuint mpv_fbo = 0;
+static GLuint mpv_texture = 0;
+static int mpv_video_width = 0;
+static int mpv_video_height = 0;
+static bool mpv_initialized = false;
+
 static std::vector<std::string> s_items_cache;
 static size_t s_items_cache_size = ~size_t(0);
 
@@ -157,7 +171,6 @@ static std::pair<int, nlohmann::json> kino_post(const nlohmann::json& payload) {
 	cli.set_follow_location(true);
 
 	httplib::Headers headers;
-	headers.emplace("Content-Type", "application/json");
 	headers.emplace("User-Agent", std::string(constants::USER_AGENT()));
 
 	const std::string body = payload.dump();
@@ -174,7 +187,83 @@ static std::pair<int, nlohmann::json> kino_post(const nlohmann::json& payload) {
 		}
 	}
 
+	if (res->status >= 400)
+		logging::write(std::format("kino server returned {}: {}", res->status, res->body));
+
 	return { res->status, response_json };
+}
+
+static void* mpv_get_proc_address(void* /*ctx*/, const char* name) {
+	return reinterpret_cast<void*>(glfwGetProcAddress(name));
+}
+
+static void ensure_mpv_initialized() {
+	if (mpv_initialized)
+		return;
+
+	mpv_ctx = mpv_create();
+	if (!mpv_ctx) {
+		logging::write("failed to create mpv context");
+		return;
+	}
+
+	mpv_set_option_string(mpv_ctx, "vo", "libmpv");
+	mpv_set_option_string(mpv_ctx, "idle", "yes");
+	mpv_set_option_string(mpv_ctx, "input-default-bindings", "no");
+	mpv_set_option_string(mpv_ctx, "input-vo-keyboard", "no");
+	mpv_set_option_string(mpv_ctx, "osc", "no");
+	mpv_set_option_string(mpv_ctx, "keep-open", "yes");
+
+	if (mpv_initialize(mpv_ctx) < 0) {
+		logging::write("failed to initialize mpv");
+		mpv_destroy(mpv_ctx);
+		mpv_ctx = nullptr;
+		return;
+	}
+
+	mpv_opengl_init_params gl_init_params{};
+	gl_init_params.get_proc_address = mpv_get_proc_address;
+
+	mpv_render_param params[] = {
+		{MPV_RENDER_PARAM_API_TYPE, const_cast<char*>(MPV_RENDER_API_TYPE_OPENGL)},
+		{MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &gl_init_params},
+		{MPV_RENDER_PARAM_INVALID, nullptr}
+	};
+
+	if (mpv_render_context_create(&mpv_render_ctx, mpv_ctx, params) < 0) {
+		logging::write("failed to create mpv render context");
+		mpv_terminate_destroy(mpv_ctx);
+		mpv_ctx = nullptr;
+		return;
+	}
+
+	glGenFramebuffers(1, &mpv_fbo);
+	glGenTextures(1, &mpv_texture);
+
+	mpv_initialized = true;
+	logging::write("mpv video player initialized");
+}
+
+static void destroy_mpv() {
+	if (mpv_render_ctx) {
+		mpv_render_context_free(mpv_render_ctx);
+		mpv_render_ctx = nullptr;
+	}
+	if (mpv_ctx) {
+		mpv_terminate_destroy(mpv_ctx);
+		mpv_ctx = nullptr;
+	}
+	if (mpv_fbo) {
+		glDeleteFramebuffers(1, &mpv_fbo);
+		mpv_fbo = 0;
+	}
+	if (mpv_texture) {
+		glDeleteTextures(1, &mpv_texture);
+		mpv_texture = 0;
+	}
+	mpv_video_width = 0;
+	mpv_video_height = 0;
+	mpv_initialized = false;
 }
 
 static void stop_video() {
@@ -184,6 +273,11 @@ static void stop_video() {
 
 	if (stream_worker_thread)
 		stream_worker_thread.reset();
+
+	if (mpv_ctx) {
+		const char* cmd[] = {"stop", nullptr};
+		mpv_command(mpv_ctx, cmd);
+	}
 
 	current_video_url.clear();
 	has_subtitle_track = false;
@@ -265,12 +359,39 @@ static std::optional<BuildPayloadResult> build_payload(uint32_t file_data_id) {
 static void play_streaming_video(const std::string& url, const std::optional<SubtitleInfo>& subtitle_info) {
 	current_video_url = url;
 
-	// always load subtitles if available, toggle visibility based on config
+	ensure_mpv_initialized();
+	if (!mpv_ctx) {
+		logging::write("mpv not available, cannot play video inline");
+		core::setToast("error", "Video player not available");
+		is_streaming = false;
+		core::view->videoPlayerState = false;
+		return;
+	}
+
+	const char* cmd[] = {"loadfile", url.c_str(), nullptr};
+	mpv_command(mpv_ctx, cmd);
+	logging::write(std::format("playing video inline: {}", url));
+
+	// load subtitles if available
 	if (subtitle_info.has_value()) {
 		try {
 			subtitles::SubtitleFormat fmt = static_cast<subtitles::SubtitleFormat>(subtitle_info->format);
 			current_subtitle_vtt = subtitles::get_subtitles_vtt(core::view->casc, subtitle_info->file_data_id, fmt);
 			has_subtitle_track = true;
+
+			// write VTT to temp file for mpv to load
+			auto temp_path = std::filesystem::temp_directory_path() / "wow_export_subs.vtt";
+			{
+				std::ofstream ofs(temp_path, std::ios::binary);
+				ofs << current_subtitle_vtt;
+			}
+
+			const char* sub_cmd[] = {"sub-add", temp_path.string().c_str(), "select", nullptr};
+			mpv_command(mpv_ctx, sub_cmd);
+
+			bool show_subs = core::view->config.value("videoPlayerShowSubtitles", true);
+			int vis = show_subs ? 1 : 0;
+			mpv_set_property(mpv_ctx, "sub-visibility", MPV_FORMAT_FLAG, &vis);
 
 			logging::write(std::format("loaded subtitles for video (fdid: {}, format: {})",
 				subtitle_info->file_data_id, subtitle_info->format));
@@ -278,10 +399,6 @@ static void play_streaming_video(const std::string& url, const std::optional<Sub
 			logging::write(std::format("failed to load subtitles: {}", e.what()));
 		}
 	}
-
-	core::openInExplorer(url);
-	logging::write(std::format("opened video URL in system handler: {}", url));
-
 }
 
 static void stream_video(const std::string& file_name) {
@@ -977,6 +1094,31 @@ void render() {
 	if (current_show_subtitles != prev_video_player_show_subtitles) {
 		logging::write(std::format("subtitle visibility changed to: {}", current_show_subtitles ? "showing" : "hidden"));
 		prev_video_player_show_subtitles = current_show_subtitles;
+		if (mpv_ctx) {
+			int vis = current_show_subtitles ? 1 : 0;
+			mpv_set_property(mpv_ctx, "sub-visibility", MPV_FORMAT_FLAG, &vis);
+		}
+	}
+
+	if (mpv_ctx) {
+		while (true) {
+			mpv_event* event = mpv_wait_event(mpv_ctx, 0);
+			if (event->event_id == MPV_EVENT_NONE)
+				break;
+			if (event->event_id == MPV_EVENT_END_FILE) {
+				auto* end = static_cast<mpv_event_end_file*>(event->data);
+				if (end->reason == MPV_END_FILE_REASON_EOF) {
+					logging::write("video playback complete");
+					is_streaming = false;
+					view.videoPlayerState = false;
+				} else if (end->reason == MPV_END_FILE_REASON_ERROR) {
+					logging::write(std::format("video playback error: {}", mpv_error_string(end->error)));
+					core::setToast("error", "Video playback error");
+					is_streaming = false;
+					view.videoPlayerState = false;
+				}
+			}
+		}
 	}
 
 	if (app::layout::BeginTab("tab-video")) {
@@ -1077,21 +1219,47 @@ void render() {
 
 	if (app::layout::BeginPreviewContainer("video-preview-container", regions)) {
 		if (is_streaming || view.videoPlayerState) {
-			if (!current_video_url.empty()) {
-				ImGui::TextUnformatted("Video opened in external player");
-				ImGui::Spacing();
-				ImGui::TextWrapped("URL: %s", current_video_url.c_str());
+			if (!current_video_url.empty() && mpv_render_ctx) {
+				ImVec2 avail = ImGui::GetContentRegionAvail();
+				int render_w = static_cast<int>(avail.x);
+				int render_h = static_cast<int>(avail.y - 30);
+				if (render_w < 1) render_w = 1;
+				if (render_h < 1) render_h = 1;
 
-				if (has_subtitle_track && !current_subtitle_vtt.empty() &&
-				    view.config.value("videoPlayerShowSubtitles", true)) {
-					ImGui::Spacing();
-					ImGui::Separator();
-					ImGui::TextUnformatted("Subtitles (VTT):");
-					ImGui::TextWrapped("%s", current_subtitle_vtt.c_str());
+				if (render_w != mpv_video_width || render_h != mpv_video_height) {
+					mpv_video_width = render_w;
+					mpv_video_height = render_h;
+					glBindTexture(GL_TEXTURE_2D, mpv_texture);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, render_w, render_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+					glBindFramebuffer(GL_FRAMEBUFFER, mpv_fbo);
+					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mpv_texture, 0);
+					glBindFramebuffer(GL_FRAMEBUFFER, 0);
 				}
 
-				ImGui::Spacing();
-				if (ImGui::Button("Stop Video"))
+				mpv_opengl_fbo fbo_params{};
+				fbo_params.fbo = static_cast<int>(mpv_fbo);
+				fbo_params.w = render_w;
+				fbo_params.h = render_h;
+				int flip_y = 1;
+
+				mpv_render_param render_params[] = {
+					{MPV_RENDER_PARAM_OPENGL_FBO, &fbo_params},
+					{MPV_RENDER_PARAM_FLIP_Y, &flip_y},
+					{MPV_RENDER_PARAM_INVALID, nullptr}
+				};
+
+				mpv_render_context_render(mpv_render_ctx, render_params);
+
+				GLint prev_viewport[4];
+				glGetIntegerv(GL_VIEWPORT, prev_viewport);
+				glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+
+				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(mpv_texture)),
+					ImVec2(static_cast<float>(render_w), static_cast<float>(render_h)));
+
+				if (ImGui::Button("Stop"))
 					stop_video();
 			} else if (poll_active) {
 				ImGui::TextUnformatted("Video is being processed, please wait...");

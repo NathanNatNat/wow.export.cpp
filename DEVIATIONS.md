@@ -75,10 +75,10 @@ These files, features, and options have been deliberately removed from the C++ p
 These deviations exist because a direct port is not possible due to fundamental differences between JavaScript and C++.
 
 
-### [tab_videos.cpp] Video playback opens in external system player instead of embedded inline
+### [tab_videos.cpp] Video playback uses libmpv instead of HTML5 `<video>` element
 - **JS Source**: `src/js/modules/tab_videos.js` lines 219–276
-- **Reason**: JS uses an HTML5 `<video>` element for inline playback with subtitle tracks, play/pause controls, seeking, and event handlers (`onended`, `onerror`, `play().catch()`). ImGui has no video widget. The C++ version opens the video URL in the system's default handler via `core::openInExplorer(url)`.
-- **Impact**: No inline playback, no embedded subtitle display, no playback event handling (ended/error state reset). The preview container shows "Video opened in external player" with a manual "Stop Video" button. Subtitles are displayed as raw VTT text when enabled. Users must manually stop the video state rather than having it auto-reset on playback completion or error.
+- **Reason**: JS uses an HTML5 `<video>` element with native browser controls (play/pause, seeking, volume). C++ uses libmpv rendering to an OpenGL FBO displayed via `ImGui::Image()`. Provides inline video with audio and subtitles, but without the browser's built-in seek bar and volume controls.
+- **Impact**: Video plays inline with audio and subtitle support. Playback end/error events are handled via mpv event polling. No seek bar or volume controls yet (mpv handles audio output directly via WASAPI/PulseAudio).
 
 ### [core.cpp] `progressLoadingScreen()` does not await redraw
 - **JS Source**: `src/js/core.js` lines 442–450

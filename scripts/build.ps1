@@ -15,6 +15,14 @@ if (-not (Test-Path $ffmpegMarker)) {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
+# Ensure libmpv prebuilt is present before configuring CMake.
+$libmpvMarker = Join-Path $PSScriptRoot "..\extern\libmpv-prebuilt\lib\mpv.lib"
+if (-not (Test-Path $libmpvMarker)) {
+    Write-Host "[build] libmpv prebuilt not found — running setup-libmpv.ps1..." -ForegroundColor Yellow
+    & (Join-Path $PSScriptRoot "setup-libmpv.ps1")
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) {
     Write-Error "vswhere.exe not found — Visual Studio is not installed"

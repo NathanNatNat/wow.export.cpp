@@ -364,7 +364,7 @@
 
 - [x] 73. [tab_videos.cpp] Video playback opens in external system player instead of embedded inline video
   - **JS Source**: `src/js/modules/tab_videos.js` lines 219–276
-  - **Status**: Verified — necessary deviation documented in DEVIATIONS.md (ImGui has no video widget; external player is the only option)
+  - **Status**: Verified — fixed; integrated libmpv for inline video playback with OpenGL FBO rendering, subtitle support via temp VTT file, and mpv event polling for end/error handling
   - **Details**: JS `play_streaming_video` sets `video.src = url` on an HTML5 `<video>` element, loads subtitles into a `<track>` element with VTT format, handles `video.play()` errors, `onended` (resets streaming state), and `onerror` (shows error toast). Users get inline video with play/pause controls, seeking, and subtitle display. C++ `play_streaming_video` (tab_videos.cpp L264–283) calls `core::openInExplorer(url)` to open the video URL in the system's default handler. No inline playback, no subtitle display, no playback event handling (ended/error). The preview container shows "Video opened in external player" text with the URL. This is a platform limitation (ImGui has no video widget), but the JS's onended/onerror state management, subtitle track toggling, and inline playback are all absent.
 
 - [x] 74. [data-exporter.cpp] `exportRawDB2` checks `byteLength()==0` instead of null/falsy check
