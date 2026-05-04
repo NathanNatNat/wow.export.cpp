@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/74 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/81 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -371,3 +371,38 @@
   - **JS Source**: `src/js/ui/data-exporter.js` line 115
   - **Status**: Pending
   - **Details**: JS checks `if (!fileData)` after `core.view.casc.getFile(fileDataID, true)`, which is a falsy check — null/undefined trigger the error, but an empty Buffer (truthy) would not. C++ (data-exporter.cpp L158) checks `if (fileData.byteLength() == 0)`, which treats a valid but empty buffer as an error. If CASC returns a valid zero-length file (e.g., a placeholder), JS would export it as a 0-byte file while C++ would throw "Failed to retrieve DB2 file from CASC". Fix: change the check to verify the BufferWrapper is in a valid/non-default state rather than checking length.
+
+- [ ] 75. [tab_textures.cpp] Missing `ImGui::SameLine()` between "Regex Enabled" label and filter input
+  - **JS Source**: `src/js/modules/tab_textures.js` lines 301–303
+  - **Status**: Pending
+  - **Details**: JS renders "Regex Enabled" div and the filter input as siblings in a CSS flex container, so they appear on the same line. C++ (tab_textures.cpp L642–652) renders `ImGui::TextUnformatted("Regex Enabled")` then `ImGui::SetNextItemWidth` + `InputTextWithHint` without an `ImGui::SameLine()` between them. When regex is enabled, the filter input drops to a second line instead of appearing inline. Other tabs (tab_videos.cpp L1058, tab_audio.cpp L530) correctly include `SameLine()` in the same pattern. Fix: add `ImGui::SameLine()` after the regex tooltip check, before `ImGui::SetNextItemWidth`.
+
+- [ ] 76. [tab_videos.cpp] Config fallbacks for `videoPlayerAutoPlay`, `videoPlayerShowSubtitles`, and `exportVideoFormat` are wrong
+  - **JS Source**: `src/default_config.jsonc` lines 90–92
+  - **Status**: Pending
+  - **Details**: `default_config.jsonc` sets `videoPlayerAutoPlay: true`, `videoPlayerShowSubtitles: true`, and `exportVideoFormat: "MP4"`. C++ tab_videos.cpp uses `config.value("videoPlayerAutoPlay", false)` (L912, L963, L1099), `config.value("videoPlayerShowSubtitles", false)` (L967, L1077, L1105), and `config.value("exportVideoFormat", std::string("AVI"))` (L1120, L1152). If any config key is missing, C++ defaults to wrong values: autoplay off (should be on), subtitles hidden (should be shown), export format AVI (should be MP4). Fix: change fallbacks to `true`, `true`, and `"MP4"` respectively.
+
+- [ ] 77. [tab_videos.cpp] `stream_video` toast-cancelled listener never cleaned up after poll completes
+  - **JS Source**: `src/js/modules/tab_videos.js` lines 183, 189, 192
+  - **Status**: Pending
+  - **Details**: JS explicitly calls `core_ref.events.off('toast-cancelled', cancel_handler)` in all three exit paths (cancelled, success, error) of the poll timer callback, removing the listener when polling finishes. C++ (tab_videos.cpp L345) registers `core::events.once("toast-cancelled", ...)` but the return value is not captured and the listener is never removed on poll success/failure. After a successful or failed poll, the orphaned `once` listener persists. If a later unrelated `toast-cancelled` event fires (e.g., from kino processing or any other toast), it will set `poll_cancelled = true`, `is_streaming = false`, and `videoPlayerState = false`, corrupting state. Fix: capture the `once` return value and call `core::events.off("toast-cancelled", listener_id)` in the poll success and error paths.
+
+- [ ] 78. [tab_videos.cpp] `trigger_kino_processing` Cancel button does not show immediate info toast
+  - **JS Source**: `src/js/modules/tab_videos.js` lines 402–406
+  - **Status**: Pending
+  - **Details**: JS `cancel_processing()` immediately calls `core.setToast('info', ...)` with the cancellation message including `processed`/`total` counts, giving instant visual feedback when the user clicks Cancel. C++ Cancel button handler (tab_videos.cpp L568–570) only sets `kino_processing_cancelled` flag and logs a generic message without progress counts. The info toast is deferred until the post-loop completion code at L628–631 runs, which requires the currently-processing video to finish first. Fix: have the Cancel handler post the cancellation toast immediately (via `core::postToMainThread`) with current progress counts.
+
+- [ ] 79. [tab_zones.cpp] `render_zone_to_canvas` missing `continue` when art style has no tiles
+  - **JS Source**: `src/js/modules/tab_zones.js` lines 120–123
+  - **Status**: Pending
+  - **Details**: JS fetches tiles for each art style unconditionally (line 120). If `all_tiles.length === 0`, `continue` (line 123) skips canvas sizing (lines 135–141), base map rendering (line 144–153), AND overlay rendering (line 155–156) for that art style. C++ (tab_zones.cpp L350–384) always sets canvas dimensions for `LayerIndex == 0` (L351–358), only fetches tiles inside the `showZoneBaseMap` block (L360–378), and always renders overlays (L381–383) regardless of whether tiles exist. If an art style has zero base tiles, JS skips its overlays while C++ still renders them. Fix: fetch tiles unconditionally before the `showZoneBaseMap` check, and `continue` if tiles are empty, matching JS flow.
+
+- [ ] 80. [tab_zones.cpp] `render_overlay_tiles` overlay-disabled check not gated by `skip_zone_check`
+  - **JS Source**: `src/js/modules/tab_zones.js` lines 255–258
+  - **Status**: Pending
+  - **Details**: JS checks `!skip_zone_check && !core.view.config.showZoneOverlays` per-tile inside the async callback — the `skip_zone_check` guard means during export, the overlay disabled check is bypassed so overlays always render. C++ (tab_zones.cpp L521–522) checks `if (!core::view->config.value("showZoneOverlays", true)) return;` unconditionally at function entry, not gated by `skip_zone_check`. During a background zone export (`skip_zone_check = true`), if the user toggles overlays off, C++ aborts overlay rendering while JS would complete it. Fix: add `&& !skip_zone_check` to the overlay disabled check, or pass `skip_zone_check` into `render_overlay_tiles` and gate accordingly.
+
+- [ ] 81. [tab_zones.cpp] `export_zone_map` reads `selected_phase_id` live instead of capturing once per zone
+  - **JS Source**: `src/js/modules/tab_zones.js` line 462–463
+  - **Status**: Pending
+  - **Details**: JS captures `const phase_id = selected_phase_id;` once per zone entry at the start of processing. Both `render_zone_to_canvas(export_canvas, zone.id, phase_id, ...)` (line 466) and `phase_suffix` construction (line 477) use this captured local variable, ensuring consistency. C++ (tab_zones.cpp L1089, L1120–1121) reads `selected_phase_id` directly at each use point. If the user changes the phase selector in the UI between the render call and filename construction (possible since export runs on the main thread), the rendered content and filename could reference different phases. Fix: capture `const auto phase_id = selected_phase_id;` at the start of each zone's export loop iteration and use the local copy throughout.
