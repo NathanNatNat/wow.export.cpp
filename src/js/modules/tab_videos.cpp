@@ -271,8 +271,12 @@ static void stop_video() {
 
 	poll_active = false;
 
-	if (stream_worker_thread)
+	if (stream_worker_thread) {
+		stream_worker_thread->request_stop();
+		if (stream_worker_thread->joinable())
+			stream_worker_thread->detach();
 		stream_worker_thread.reset();
+	}
 
 	if (mpv_ctx) {
 		const char* cmd[] = {"stop", nullptr};
@@ -417,24 +421,28 @@ static void stream_video(const std::string& file_name) {
 	is_streaming = true;
 	core::view->videoPlayerState = true;
 
-	const auto build_result = build_payload(file_data_id);
-	if (!build_result.has_value()) {
-		core::setToast("error", "Failed to get video encoding info");
-		is_streaming = false;
-		core::view->videoPlayerState = false;
-		return;
+	if (stream_worker_thread) {
+		stream_worker_thread->request_stop();
+		if (stream_worker_thread->joinable())
+			stream_worker_thread->detach();
+		stream_worker_thread.reset();
 	}
 
-	nlohmann::json payload = build_result->payload;
-	std::optional<SubtitleInfo> subtitle = build_result->subtitle;
-	logging::write(std::format("sending kino request: {}", payload.dump()));
-
-	if (stream_worker_thread)
-		stream_worker_thread.reset();
-
-	stream_worker_thread = std::make_unique<std::jthread>([payload = std::move(payload),
-	                                                        subtitle = std::move(subtitle),
+	stream_worker_thread = std::make_unique<std::jthread>([file_data_id,
 	                                                        file_name]() {
+		const auto build_result = build_payload(file_data_id);
+		if (!build_result.has_value()) {
+			core::postToMainThread([]() {
+				core::setToast("error", "Failed to get video encoding info");
+				is_streaming = false;
+				core::view->videoPlayerState = false;
+			});
+			return;
+		}
+
+		nlohmann::json payload = build_result->payload;
+		std::optional<SubtitleInfo> subtitle = build_result->subtitle;
+		logging::write(std::format("sending kino request: {}", payload.dump()));
 		try {
 			auto [status, data] = kino_post(payload);
 
@@ -1220,9 +1228,10 @@ void render() {
 	if (app::layout::BeginPreviewContainer("video-preview-container", regions)) {
 		if (is_streaming || view.videoPlayerState) {
 			if (!current_video_url.empty() && mpv_render_ctx) {
+				const float controls_height = 28.0f;
 				ImVec2 avail = ImGui::GetContentRegionAvail();
 				int render_w = static_cast<int>(avail.x);
-				int render_h = static_cast<int>(avail.y - 30);
+				int render_h = static_cast<int>(avail.y - controls_height);
 				if (render_w < 1) render_w = 1;
 				if (render_h < 1) render_h = 1;
 
@@ -1238,28 +1247,66 @@ void render() {
 					glBindFramebuffer(GL_FRAMEBUFFER, 0);
 				}
 
-				mpv_opengl_fbo fbo_params{};
-				fbo_params.fbo = static_cast<int>(mpv_fbo);
-				fbo_params.w = render_w;
-				fbo_params.h = render_h;
-				int flip_y = 1;
+				if (mpv_render_context_update(mpv_render_ctx) & MPV_RENDER_UPDATE_FRAME) {
+					mpv_opengl_fbo fbo_params{};
+					fbo_params.fbo = static_cast<int>(mpv_fbo);
+					fbo_params.w = render_w;
+					fbo_params.h = render_h;
+					int flip_y = 1;
 
-				mpv_render_param render_params[] = {
-					{MPV_RENDER_PARAM_OPENGL_FBO, &fbo_params},
-					{MPV_RENDER_PARAM_FLIP_Y, &flip_y},
-					{MPV_RENDER_PARAM_INVALID, nullptr}
-				};
+					mpv_render_param render_params[] = {
+						{MPV_RENDER_PARAM_OPENGL_FBO, &fbo_params},
+						{MPV_RENDER_PARAM_FLIP_Y, &flip_y},
+						{MPV_RENDER_PARAM_INVALID, nullptr}
+					};
 
-				mpv_render_context_render(mpv_render_ctx, render_params);
-
-				GLint prev_viewport[4];
-				glGetIntegerv(GL_VIEWPORT, prev_viewport);
-				glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+					mpv_render_context_render(mpv_render_ctx, render_params);
+				}
 
 				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(mpv_texture)),
-					ImVec2(static_cast<float>(render_w), static_cast<float>(render_h)));
+					ImVec2(static_cast<float>(render_w), static_cast<float>(render_h)),
+					ImVec2(0, 1), ImVec2(1, 0));
 
-				if (ImGui::Button("Stop"))
+				double time_pos = 0.0, duration = 0.0;
+				int paused = 0;
+				double volume = 100.0;
+				mpv_get_property(mpv_ctx, "time-pos", MPV_FORMAT_DOUBLE, &time_pos);
+				mpv_get_property(mpv_ctx, "duration", MPV_FORMAT_DOUBLE, &duration);
+				mpv_get_property(mpv_ctx, "pause", MPV_FORMAT_FLAG, &paused);
+				mpv_get_property(mpv_ctx, "volume", MPV_FORMAT_DOUBLE, &volume);
+
+				if (ImGui::SmallButton(paused ? ">" : "||")) {
+					int toggle = !paused;
+					mpv_set_property(mpv_ctx, "pause", MPV_FORMAT_FLAG, &toggle);
+				}
+
+				ImGui::SameLine();
+				int cur_min = static_cast<int>(time_pos) / 60;
+				int cur_sec = static_cast<int>(time_pos) % 60;
+				int dur_min = static_cast<int>(duration) / 60;
+				int dur_sec = static_cast<int>(duration) % 60;
+				ImGui::Text("%d:%02d / %d:%02d", cur_min, cur_sec, dur_min, dur_sec);
+
+				ImGui::SameLine();
+				float seek_pos = (duration > 0) ? static_cast<float>(time_pos / duration) : 0.0f;
+				float seek_width = ImGui::GetContentRegionAvail().x - 120.0f;
+				if (seek_width < 50.0f) seek_width = 50.0f;
+				ImGui::SetNextItemWidth(seek_width);
+				if (ImGui::SliderFloat("##seek", &seek_pos, 0.0f, 1.0f, "")) {
+					double new_pos = seek_pos * duration;
+					mpv_set_property(mpv_ctx, "time-pos", MPV_FORMAT_DOUBLE, &new_pos);
+				}
+
+				ImGui::SameLine();
+				float vol = static_cast<float>(volume);
+				ImGui::SetNextItemWidth(60.0f);
+				if (ImGui::SliderFloat("##vol", &vol, 0.0f, 100.0f, "%.0f%%")) {
+					double new_vol = static_cast<double>(vol);
+					mpv_set_property(mpv_ctx, "volume", MPV_FORMAT_DOUBLE, &new_vol);
+				}
+
+				ImGui::SameLine();
+				if (ImGui::SmallButton("Stop"))
 					stop_video();
 			} else if (poll_active) {
 				ImGui::TextUnformatted("Video is being processed, please wait...");
