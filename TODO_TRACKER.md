@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/64 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/66 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -321,3 +321,13 @@
   - **JS Source**: `src/js/modules/tab_text.js` lines 30–33
   - **Status**: Pending
   - **Details**: JS renders "Regex Enabled" text and the filter input on the same line (siblings in a flex div). C++ (tab_text.cpp L193–204) renders them without `ImGui::SameLine()` between them, causing the filter input to appear below the regex label when regex is enabled. Other tabs like `tab_raw.cpp` (L383) correctly include `SameLine()`. Fix: add `ImGui::SameLine()` after the regex tooltip check, before `ImGui::SetNextItemWidth`.
+
+- [ ] 65. [tab_fonts.cpp] Missing `ImGui::SameLine()` between regex label and filter input
+  - **JS Source**: `src/js/modules/tab_fonts.js` lines 60–62
+  - **Status**: Pending
+  - **Details**: Same issue as #64 but in tab_fonts.cpp. Lines 268–274 render "Regex Enabled" text and tooltip but do not call `ImGui::SameLine()` before the filter input (L274). Both `tab_audio.cpp` (L529) and `tab_data.cpp` (L292) correctly include `SameLine()` in the same pattern. Fix: add `ImGui::SameLine()` after the tooltip check on L271, before `ImGui::SetNextItemWidth`.
+
+- [ ] 66. [tab_creatures.cpp] Missing stack trace in `helper.mark()` export catch blocks
+  - **JS Source**: `src/js/modules/tab_creatures.js` lines 933, 973
+  - **Status**: Pending
+  - **Details**: Both catch blocks in `export_files` (tab_creatures.cpp L1348 and L1396) pass only `e.what()` to `helper.mark()` without a stack trace: `helper.mark(creature_name, false, e.what())`. JS passes both `e.message` and `e.stack` as separate arguments. Other tabs (tab_decor L289, tab_models L811) correctly pass `build_stack_trace("export_files", e)` as the 4th argument. The tab_creatures file is also missing the `build_stack_trace` helper entirely. Fix: add `build_stack_trace` and update both catch blocks to `helper.mark(creature_name, false, e.what(), build_stack_trace("export_files", e))`.
