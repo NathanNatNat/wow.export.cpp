@@ -14,6 +14,8 @@ bool equip_item(uint32_t item_id, const std::string& item_name, int pending_slot
 		return false;
 
 	int slot_id = slot_id_opt.value();
+	if (slot_id == 0)
+		return false;
 	auto& view = *core::view;
 
 	std::vector<int> slot_ids;

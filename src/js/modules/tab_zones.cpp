@@ -239,6 +239,9 @@ static void render_world_map_overlays(const CombinedArtStyle& art_style, int exp
 static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const CombinedArtStyle& art_style, int overlay_offset_x, int overlay_offset_y, int expected_zone_id, bool skip_zone_check);
 
 static ZoneMapInfo render_zone_to_canvas(int zone_id, std::optional<int> phase_id = std::nullopt, bool skip_zone_check = false) {
+if (!core::view->zoneMapPixels.empty())
+	std::fill(core::view->zoneMapPixels.begin(), core::view->zoneMapPixels.end(), 0u);
+
 const auto ui_map_id = get_zone_ui_map_id(zone_id);
 if (!ui_map_id.has_value()) {
 logging::write(std::format("no UiMap found for zone ID {}", zone_id));
@@ -343,9 +346,6 @@ return a.layer_index < b.layer_index;
 });
 
 int map_width = 0, map_height = 0;
-
-if (!core::view->zoneMapPixels.empty())
-	std::fill(core::view->zoneMapPixels.begin(), core::view->zoneMapPixels.end(), 0u);
 
 for (const auto& art_style : art_styles) {
 	auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
@@ -574,8 +574,10 @@ static void load_zone_map(int zone_id, std::optional<int> phase_id = std::nullop
 
 static void runZoneLoadWorker(int zone_id, std::optional<int> phase_id) {
 	std::thread([zone_id, phase_id]() {
+		bool success = false;
 		try {
 			render_zone_to_canvas(zone_id, phase_id);
+			success = true;
 		} catch (const std::exception& e) {
 			logging::write(std::format("failed to render zone map: {}", e.what()));
 			core::postToMainThread([msg = std::string(e.what())]() {
@@ -583,13 +585,15 @@ static void runZoneLoadWorker(int zone_id, std::optional<int> phase_id) {
 			});
 		}
 
-		core::postToMainThread([]() {
-			auto& view = *core::view;
-			if (!view.zoneMapPixels.empty() && view.zoneMapWidth > 0 && view.zoneMapHeight > 0) {
-				view.zoneMapTexID = upload_rgba_to_gl(
-					view.zoneMapPixels.data(),
-					view.zoneMapWidth, view.zoneMapHeight,
-					view.zoneMapTexID);
+		core::postToMainThread([success]() {
+			if (success) {
+				auto& view = *core::view;
+				if (!view.zoneMapPixels.empty() && view.zoneMapWidth > 0 && view.zoneMapHeight > 0) {
+					view.zoneMapTexID = upload_rgba_to_gl(
+						view.zoneMapPixels.data(),
+						view.zoneMapWidth, view.zoneMapHeight,
+						view.zoneMapTexID);
+				}
 			}
 
 			s_zone_load_in_flight.store(false, std::memory_order_release);
@@ -915,11 +919,9 @@ context_menu::render(
 	}
 
 	if (view.zonePhases.size() > 1) {
-		const ImVec2 canvas_size = ImGui::GetWindowSize();
 		const float combo_w = 140.0f;
-		const float combo_h = ImGui::GetFrameHeight();
-		const float pad = 6.0f;
-		ImGui::SetCursorPos(ImVec2(canvas_size.x - combo_w - pad, canvas_size.y - combo_h - pad));
+		const float pad = 10.0f;
+		ImGui::SetCursorPos(ImVec2(pad, pad));
 
 		std::string current_label = "Default";
 		if (view.zonePhaseSelection.is_number()) {
@@ -1078,9 +1080,16 @@ const std::string format = view.config.value("exportTextureFormat", std::string(
 const std::string ext = format == "WEBP" ? ".webp" : ".png";
 const std::string mime_type = format == "WEBP" ? "image/webp" : "image/png";
 
+auto saved_pixels = view.zoneMapPixels;
+int saved_w = view.zoneMapWidth;
+int saved_h = view.zoneMapHeight;
+
+bool cancelled = false;
 for (const auto& zone_entry : user_selection) {
-if (helper.isCancelled())
-return;
+if (helper.isCancelled()) {
+cancelled = true;
+break;
+}
 
 try {
 const auto zone = parse_zone_entry(zone_entry.get<std::string>());
@@ -1170,6 +1179,13 @@ logging::write(std::format("failed to export zone map: {}", e.what()));
 helper.mark(zone_entry.get<std::string>(), false, e.what(), build_stack_trace("export_zone_map", e));
 }
 }
+
+view.zoneMapPixels = std::move(saved_pixels);
+view.zoneMapWidth = saved_w;
+view.zoneMapHeight = saved_h;
+
+if (cancelled)
+return;
 
 helper.finish();
 }

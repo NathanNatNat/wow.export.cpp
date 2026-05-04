@@ -222,10 +222,10 @@ void exportFiles(
 			return;
 
 		const auto [fileName, fileDataID] = getFileInfoPair(fileEntry);
+		std::string markFileName = fileName;
 
 		try {
 			std::string exportFileName = fileName;
-			std::string markFileName = exportFileName;
 
 			// Use fileDataID as filename if exportNamedFiles is disabled
 			if (!isLocal && !core::view->config.value("exportNamedFiles", true) && fileDataID) {
@@ -303,7 +303,7 @@ void exportFiles(
 			if (fileDataID) entry["fileDataID"] = *fileDataID;
 			manifest["succeeded"].push_back(std::move(entry));
 		} catch (const std::exception& e) {
-			helper.mark(fileName, false, e.what(), std::nullopt);
+			helper.mark(markFileName, false, e.what(), std::nullopt);
 			nlohmann::json entry = {{"type", format}};
 			if (fileDataID) entry["fileDataID"] = *fileDataID;
 			manifest["failed"].push_back(std::move(entry));

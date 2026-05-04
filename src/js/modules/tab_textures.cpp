@@ -382,7 +382,7 @@ static void export_texture_atlas_regions_impl(uint32_t file_data_id) {
 
 			auto region_it = texture_atlas_regions.find(region_id);
 			if (region_it == texture_atlas_regions.end())
-				continue;
+				throw std::runtime_error(std::format("atlas region {} not found", region_id));
 
 			const auto& region = region_it->second;
 
@@ -556,6 +556,10 @@ void render() {
 				const uint32_t fid = *file_data_id_opt;
 				if (selected_file_data_id != fid)
 					preview_texture_by_id_impl(fid, "");
+			} else {
+				core::setToast("error", "Unable to preview texture " + first,
+					{ {"View Log", []() { logging::openRuntimeLog(); }} }, -1);
+				logging::write(std::format("Failed to resolve texture filename: {}", first));
 			}
 		}
 	}
