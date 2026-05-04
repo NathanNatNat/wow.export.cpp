@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/47 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/49 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -236,3 +236,13 @@
   - **JS Source**: `src/js/modules/legacy_tab_data.js` line 131
   - **Status**: Pending
   - **Details**: JS DBC listbox sets `unittype="dbc file"` which enables the status bar text showing the number of DBC files found. C++ (legacy_tab_data.cpp L267) passes `""` for the unittype parameter, suppressing the status text. Additionally, unlike every other legacy tab (audio, files, fonts, textures) which all have an explicit `app::layout::BeginStatusBar` / `listbox::renderStatusBar` block, `legacy_tab_data` has none for the DBC listbox (between EndListContainer at L282 and BeginFilterBar at L284). Fix: change unittype from `""` to `"dbc file"` at L267, and add a status bar block between L282 and L284.
+
+- [ ] 48. [legacy_tab_fonts.cpp] `persistscrollkey` is `"legacy-fonts"` instead of `"fonts"`
+  - **JS Source**: `src/js/modules/legacy_tab_fonts.js` line 63
+  - **Status**: Pending
+  - **Details**: JS Listbox sets `persistscrollkey="fonts"` for the font file list. C++ (legacy_tab_fonts.cpp L169) passes `"legacy-fonts"` as the persist scroll key parameter. This means scroll position is stored under a different key than what JS uses, so scroll position would not carry over if persistence is ever shared between the two implementations, and it's a deviation from the JS source. Fix: change `"legacy-fonts"` to `"fonts"` at legacy_tab_fonts.cpp L169.
+
+- [ ] 49. [screen_source_select.cpp] CDN auto-selection loop finds absolute fastest instead of last-below-default
+  - **JS Source**: `src/js/modules/screen_source_select.js` lines 239–248
+  - **Status**: Pending
+  - **Details**: In the CDN fastest-region selection loop (after all pings), JS sets `let selected_region = this.$core.view.selectedCDNRegion` which is a reference to the original default region object. The loop compares each `region.delay < selected_region.delay` but does NOT update `selected_region` — so every region is compared against the original default's delay. If US=100ms, EU=50ms, KR=75ms: EU (50<100) sets selectedCDNRegion=EU, then KR (75<100) overwrites to KR. The last region below the default wins. C++ (screen_source_select.cpp L588) adds `selected_region = region` which updates the local tracker, so it finds the absolute lowest delay (EU=50ms wins). While C++ behavior is arguably better, it deviates from JS. Note: this is currently unreachable due to TODO #41 (delay stays null), but would matter once #41 is fixed. Fix: remove line 588 (`selected_region = region;`) to match JS behavior.
