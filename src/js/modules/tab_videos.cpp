@@ -87,6 +87,7 @@ static bool is_streaming = false;
 static std::atomic<bool> poll_active{false};
 
 static std::atomic<bool> poll_cancelled{false};
+static std::atomic<size_t> poll_cancel_listener_id{0};
 
 static std::atomic<bool> kino_processing_cancelled{false};
 static std::atomic<bool> kino_processing_active{false};
@@ -342,13 +343,15 @@ static void stream_video(const std::string& file_name) {
 				core::postToMainThread([]() {
 					if (!poll_cancelled.load()) {
 						core::setToast("progress", "Video is being processed, please wait...", {}, -1, true);
-						core::events.once("toast-cancelled", []() {
-							poll_cancelled.store(true);
-							poll_active.store(false);
-							is_streaming = false;
-							core::view->videoPlayerState = false;
-							logging::write("video processing cancelled by user");
-						});
+						poll_cancel_listener_id.store(
+							core::events.once("toast-cancelled", []() {
+								poll_cancelled.store(true);
+								poll_active.store(false);
+								is_streaming = false;
+								core::view->videoPlayerState = false;
+								logging::write("video processing cancelled by user");
+							})
+						);
 					}
 				});
 
@@ -393,6 +396,11 @@ static void stream_video(const std::string& file_name) {
 				}
 
 				poll_active = false;
+				if (size_t lid = poll_cancel_listener_id.exchange(0); lid != 0) {
+					core::postToMainThread([lid]() {
+						core::events.off("toast-cancelled", lid);
+					});
+				}
 			} else {
 				throw std::runtime_error(std::format("server returned {}", status));
 			}
@@ -565,9 +573,10 @@ static void trigger_kino_processing() {
 				if (kino_processing_cancelled.load())
 					return;
 				const std::string msg = std::format("Processing videos: {}/{} ({} errors)", p, total, e);
-				core::setToast("progress", msg, { {"Cancel", []() {
+				core::setToast("progress", msg, { {"Cancel", [p, total]() {
 					kino_processing_cancelled.store(true);
-					logging::write("kino_processing: cancelled by user");
+					logging::write(std::format("kino_processing: cancelled by user at {}/{}", p, total));
+					core::setToast("info", std::format("Video processing cancelled. Processed {}/{} videos.", p, total));
 				}} }, -1, true);
 			});
 		};
@@ -909,7 +918,7 @@ void registerTab() {
 void mounted() {
 	auto& view = *core::view;
 
-	prev_video_player_show_subtitles = view.config.value("videoPlayerShowSubtitles", false);
+	prev_video_player_show_subtitles = view.config.value("videoPlayerShowSubtitles", true);
 	const bool sort_by_id = view.config.value("listfileSortByID", false);
 
 	std::thread([sort_by_id]() {
@@ -959,12 +968,12 @@ void render() {
 
 			selected_file = first;
 
-			if (view.config.value("videoPlayerAutoPlay", false))
+			if (view.config.value("videoPlayerAutoPlay", true))
 				stream_video(first);
 		}
 	}
 
-	const bool current_show_subtitles = view.config.value("videoPlayerShowSubtitles", false);
+	const bool current_show_subtitles = view.config.value("videoPlayerShowSubtitles", true);
 	if (current_show_subtitles != prev_video_player_show_subtitles) {
 		logging::write(std::format("subtitle visibility changed to: {}", current_show_subtitles ? "showing" : "hidden"));
 		prev_video_player_show_subtitles = current_show_subtitles;
@@ -1074,7 +1083,7 @@ void render() {
 				ImGui::TextWrapped("URL: %s", current_video_url.c_str());
 
 				if (has_subtitle_track && !current_subtitle_vtt.empty() &&
-				    view.config.value("videoPlayerShowSubtitles", false)) {
+				    view.config.value("videoPlayerShowSubtitles", true)) {
 					ImGui::Spacing();
 					ImGui::Separator();
 					ImGui::TextUnformatted("Subtitles (VTT):");
@@ -1096,13 +1105,13 @@ void render() {
 	app::layout::EndPreviewContainer();
 
 	if (app::layout::BeginPreviewControls("videos-preview-controls", regions)) {
-		bool autoplay_val = view.config.value("videoPlayerAutoPlay", false);
+		bool autoplay_val = view.config.value("videoPlayerAutoPlay", true);
 		if (ImGui::Checkbox("Autoplay", &autoplay_val))
 			view.config["videoPlayerAutoPlay"] = autoplay_val;
 
 		ImGui::SameLine();
 
-		bool show_subs = view.config.value("videoPlayerShowSubtitles", false);
+		bool show_subs = view.config.value("videoPlayerShowSubtitles", true);
 		if (ImGui::Checkbox("Show Subtitles", &show_subs))
 			view.config["videoPlayerShowSubtitles"] = show_subs;
 
@@ -1117,7 +1126,7 @@ void render() {
 			for (const auto& opt : view.menuButtonVideos)
 				mb_options.push_back({ opt.label, opt.value });
 			menu_button::render("##MenuButtonVideos", mb_options,
-				view.config.value("exportVideoFormat", std::string("AVI")),
+				view.config.value("exportVideoFormat", std::string("MP4")),
 				busy, false, menu_button_videos_state,
 				[&](const std::string& val) { view.config["exportVideoFormat"] = val; },
 				[]() { export_selected(); });

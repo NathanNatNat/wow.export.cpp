@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <locale>
 #include <optional>
 #include <regex>
 #include <string>
@@ -357,9 +358,10 @@ static void initialize() {
 		static const std::regex id_suffix(R"(\s+\[\d+\]$)");
 		std::string name_a = std::regex_replace(a.display, id_suffix, "");
 		std::string name_b = std::regex_replace(b.display, id_suffix, "");
-		std::transform(name_a.begin(), name_a.end(), name_a.begin(), ::tolower);
-		std::transform(name_b.begin(), name_b.end(), name_b.begin(), ::tolower);
-		return name_a < name_b;
+		static const std::locale loc("");
+		const auto& coll = std::use_facet<std::collate<char>>(loc);
+		return coll.compare(name_a.data(), name_a.data() + name_a.size(),
+		                    name_b.data(), name_b.data() + name_b.size()) < 0;
 	});
 
 	const auto& categories = db::caches::DBDecorCategories::get_all_categories();

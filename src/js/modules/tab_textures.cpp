@@ -560,6 +560,13 @@ void render() {
 
 	if (app::layout::BeginTab("tab-textures")) {
 
+	if (!core::view->toast.has_value() && !core::view->overrideTextureList.empty()) {
+		ImGui::Text("Filtering textures for item: %s", core::view->overrideTextureName.c_str());
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Remove"))
+			remove_override_textures();
+	}
+
 	auto regions = app::layout::CalcListTabRegions(false);
 
 	if (app::layout::BeginListContainer("textures-list-container", regions)) {
@@ -643,6 +650,7 @@ void render() {
 			ImGui::TextUnformatted("Regex Enabled");
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip("%s", view.regexTooltip.c_str());
+			ImGui::SameLine();
 		}
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);

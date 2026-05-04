@@ -75,6 +75,11 @@ These files, features, and options have been deliberately removed from the C++ p
 These deviations exist because a direct port is not possible due to fundamental differences between JavaScript and C++.
 
 
+### [tab_videos.cpp] Video playback opens in external system player instead of embedded inline
+- **JS Source**: `src/js/modules/tab_videos.js` lines 219–276
+- **Reason**: JS uses an HTML5 `<video>` element for inline playback with subtitle tracks, play/pause controls, seeking, and event handlers (`onended`, `onerror`, `play().catch()`). ImGui has no video widget. The C++ version opens the video URL in the system's default handler via `core::openInExplorer(url)`.
+- **Impact**: No inline playback, no embedded subtitle display, no playback event handling (ended/error state reset). The preview container shows "Video opened in external player" with a manual "Stop Video" button. Subtitles are displayed as raw VTT text when enabled. Users must manually stop the video state rather than having it auto-reset on playback completion or error.
+
 ### [core.cpp] `progressLoadingScreen()` does not await redraw
 - **JS Source**: `src/js/core.js` lines 442–450
 - **Reason**: JS uses `await generics.redraw()` to yield control to the event loop and wait for two animation frames before returning, ensuring each progress step is visible. In the C++ ImGui architecture, the main loop owns the render cycle — there is no mechanism to "await" a frame render from within a function called during frame processing. The C++ version posts progress updates to the main thread queue via `postToMainThread`, which applies them on the next frame.

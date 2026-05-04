@@ -348,6 +348,21 @@ if (!core::view->zoneMapPixels.empty())
 	std::fill(core::view->zoneMapPixels.begin(), core::view->zoneMapPixels.end(), 0u);
 
 for (const auto& art_style : art_styles) {
+	auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
+	auto all_tiles = ui_map_art_tile.getRelationRows(art_style.id);
+
+	if (all_tiles.empty()) {
+		logging::write(std::format("no tiles found for UiMapArt ID {}", art_style.id));
+		continue;
+	}
+
+	std::map<int, std::vector<db::DataRecord>> tiles_by_layer;
+	for (const auto& tile : all_tiles) {
+		auto layer_it = tile.find("LayerIndex");
+		int tile_layer = (layer_it != tile.end()) ? fieldToInt(layer_it->second) : 0;
+		tiles_by_layer[tile_layer].push_back(tile);
+	}
+
 	if (art_style.layer_index == 0) {
 		map_width = art_style.layer_width;
 		map_height = art_style.layer_height;
@@ -358,23 +373,9 @@ for (const auto& art_style : art_styles) {
 	}
 
 	if (core::view->config.value("showZoneBaseMap", true)) {
-		auto& ui_map_art_tile = casc::db2::getTable("UiMapArtTile");
-		auto all_tiles = ui_map_art_tile.getRelationRows(art_style.id);
-
-		if (all_tiles.empty()) {
-			logging::write(std::format("no tiles found for UiMapArt ID {}", art_style.id));
-		} else {
-			std::map<int, std::vector<db::DataRecord>> tiles_by_layer;
-			for (const auto& tile : all_tiles) {
-				auto layer_it = tile.find("LayerIndex");
-				int tile_layer = (layer_it != tile.end()) ? fieldToInt(layer_it->second) : 0;
-				tiles_by_layer[tile_layer].push_back(tile);
-			}
-
-			for (const auto& [layer_num, layer_tiles] : tiles_by_layer) {
-				logging::write(std::format("rendering layer {} with {} tiles", layer_num, layer_tiles.size()));
-				render_map_tiles(art_style, layer_num, zone_id, skip_zone_check);
-			}
+		for (const auto& [layer_num, layer_tiles] : tiles_by_layer) {
+			logging::write(std::format("rendering layer {} with {} tiles", layer_num, layer_tiles.size()));
+			render_map_tiles(art_style, layer_num, zone_id, skip_zone_check);
 		}
 	}
 
@@ -518,7 +519,7 @@ static void render_overlay_tiles(const std::vector<db::DataRecord>& tiles, const
 	if (!skip_zone_check && selected_zone_id.has_value() && *selected_zone_id != expected_zone_id)
 		return;
 
-	if (!core::view->config.value("showZoneOverlays", true))
+	if (!skip_zone_check && !core::view->config.value("showZoneOverlays", true))
 		return;
 
 	std::vector<db::DataRecord> sorted_tiles(tiles.begin(), tiles.end());

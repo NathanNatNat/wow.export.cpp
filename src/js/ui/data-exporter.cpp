@@ -155,7 +155,7 @@ void exportRawDB2(
 			h->mark(fileName, true);
 		} else {
 			BufferWrapper fileData = casc->getVirtualFileByID(fileDataID, true);
-			if (fileData.byteLength() == 0)
+			if (fileData.raw().data() == nullptr)
 				throw std::runtime_error("Failed to retrieve DB2 file from CASC");
 
 			fileData.writeToFile(fs::path(exportPath));
