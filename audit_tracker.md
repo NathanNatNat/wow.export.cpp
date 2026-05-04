@@ -2,7 +2,7 @@
 
 Tracks which `.cpp` files in `src/` have been audited against the original JS source.
 
-**Progress: 120/188 audited (64%)**
+**Progress: 135/188 audited (72%)**
 
 - [x] 1. `src/app.cpp`
 - [x] 2. `src/js/blob.cpp`
@@ -124,21 +124,21 @@ Tracks which `.cpp` files in `src/` have been audited against the original JS so
 - [x] 118. `src/js/db/FieldType.cpp`
 - [x] 119. `src/js/db/WDCReader.cpp`
 - [x] 120. `src/js/db/caches/DBCharacterCustomization.cpp`
-- [ ] 121. `src/js/db/caches/DBComponentModelFileData.cpp`
-- [ ] 122. `src/js/db/caches/DBComponentTextureFileData.cpp`
-- [ ] 123. `src/js/db/caches/DBCreatureDisplayExtra.cpp`
-- [ ] 124. `src/js/db/caches/DBCreatureList.cpp`
-- [ ] 125. `src/js/db/caches/DBCreatures.cpp`
-- [ ] 126. `src/js/db/caches/DBCreaturesLegacy.cpp`
-- [ ] 127. `src/js/db/caches/DBDecor.cpp`
-- [ ] 128. `src/js/db/caches/DBDecorCategories.cpp`
-- [ ] 129. `src/js/db/caches/DBGuildTabard.cpp`
-- [ ] 130. `src/js/db/caches/DBItemCharTextures.cpp`
-- [ ] 131. `src/js/db/caches/DBItemDisplayInfoModelMatRes.cpp`
-- [ ] 132. `src/js/db/caches/DBItemDisplays.cpp`
-- [ ] 133. `src/js/db/caches/DBItemGeosets.cpp`
-- [ ] 134. `src/js/db/caches/DBItemModels.cpp`
-- [ ] 135. `src/js/db/caches/DBItems.cpp`
+- [x] 121. `src/js/db/caches/DBComponentModelFileData.cpp`
+- [x] 122. `src/js/db/caches/DBComponentTextureFileData.cpp`
+- [x] 123. `src/js/db/caches/DBCreatureDisplayExtra.cpp`
+- [x] 124. `src/js/db/caches/DBCreatureList.cpp`
+- [x] 125. `src/js/db/caches/DBCreatures.cpp`
+- [x] 126. `src/js/db/caches/DBCreaturesLegacy.cpp`
+- [x] 127. `src/js/db/caches/DBDecor.cpp`
+- [x] 128. `src/js/db/caches/DBDecorCategories.cpp`
+- [x] 129. `src/js/db/caches/DBGuildTabard.cpp`
+- [x] 130. `src/js/db/caches/DBItemCharTextures.cpp`
+- [x] 131. `src/js/db/caches/DBItemDisplayInfoModelMatRes.cpp`
+- [x] 132. `src/js/db/caches/DBItemDisplays.cpp`
+- [x] 133. `src/js/db/caches/DBItemGeosets.cpp`
+- [x] 134. `src/js/db/caches/DBItemModels.cpp`
+- [x] 135. `src/js/db/caches/DBItems.cpp`
 - [ ] 136. `src/js/db/caches/DBModelFileData.cpp`
 - [ ] 137. `src/js/db/caches/DBNpcEquipment.cpp`
 - [ ] 138. `src/js/db/caches/DBTextureFileData.cpp`
