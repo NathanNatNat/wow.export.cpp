@@ -160,7 +160,7 @@ public:
 	 * @param char_bone_matrices - character's bone matrices (flat column-major array)
 	 * @param matrix_count - number of matrices available (in float elements / 16)
 	 */
-	void applyExternalBoneMatrices(const float* char_bone_matrices, size_t matrix_count);
+	void applyExternalBoneMatrices(const float* char_bone_matrices, size_t float_count);
 
 	/**
 	 * Set geoset visibility by group using attachmentGeosetGroup values

@@ -9,13 +9,13 @@
 
 FileWriter::FileWriter(const std::filesystem::path& file, std::string_view /*encoding*/)
 	: write_mutex(std::make_unique<std::mutex>()) {
-	stream.open(file, std::ios::out | std::ios::trunc);
+	stream.open(file, std::ios::out | std::ios::binary | std::ios::trunc);
 	if (!stream.is_open()) {
 		if (!std::filesystem::is_directory(file))
 			throw std::runtime_error("failed to open file for writing: " + file.string());
 
 		std::filesystem::remove_all(file);
-		stream.open(file, std::ios::out | std::ios::trunc);
+		stream.open(file, std::ios::out | std::ios::binary | std::ios::trunc);
 
 		if (!stream.is_open())
 			throw std::runtime_error("failed to open file after removing directory: " + file.string());

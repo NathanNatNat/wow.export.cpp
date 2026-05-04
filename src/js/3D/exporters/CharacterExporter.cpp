@@ -310,7 +310,7 @@ std::optional<CharacterExporter::ProcessedGeometry> CharacterExporter::_process_
 	if (is_collection_style && apply_pose && char_bone_matrices) {
 		// collection-style models use character's bone matrices via remapping
 		// first ensure bone matrices are updated from character
-		renderer->applyExternalBoneMatrices(char_bone_matrices->data(), char_bone_matrices->size() / 16);
+		renderer->applyExternalBoneMatrices(char_bone_matrices->data(), char_bone_matrices->size());
 
 		// bake geometry using the remapped bone matrices
 		if (!renderer->get_bone_matrices().empty() && !m2->boneIndices.empty() && !m2->boneWeights.empty()) {

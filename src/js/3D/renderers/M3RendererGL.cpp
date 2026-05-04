@@ -42,8 +42,6 @@ void M3RendererGL::load() {
 
 	shader = M3RendererGL::load_shaders(ctx);
 
-	bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, 1);
-
 	_create_default_texture();
 
 	if (!m3->vertices.empty())
@@ -128,6 +126,8 @@ void M3RendererGL::loadLOD(int index) {
 
 	gl::VertexArray* vao_raw = vao.get();
 	vaos.push_back(std::move(vao));
+
+	bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, 1);
 
 	// build draw calls for LOD geosets
 	draw_calls.clear();
@@ -322,11 +322,6 @@ void M3RendererGL::_dispose_geometry() {
 
 void M3RendererGL::dispose() {
 	_dispose_geometry();
-
-	if (bones_ubo.ubo) {
-		bones_ubo.ubo->dispose();
-		bones_ubo.ubo.reset();
-	}
 
 	if (default_texture) {
 		default_texture->dispose();

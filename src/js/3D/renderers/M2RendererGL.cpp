@@ -480,8 +480,6 @@ return as_async_compat([this]() {
 	// load shader program
 	shader = M2RendererGL::load_shaders(ctx);
 
-	bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, bones_count());
-
 	// create texture transform matrices
 	_create_tex_matrices();
 
@@ -492,7 +490,7 @@ return as_async_compat([this]() {
 	_load_textures().get();
 
 	global_seq_times.assign(m2->globalLoops.size(), 0.0f);
-	submesh_colors.assign(m2->colors.size() * 4, 1.0f);
+	submesh_colors.assign(m2->colors.size() * 4, 0.0f);
 	tex_weights.assign(m2->textureWeights.size(), 1.0f);
 
 	// load first skin
@@ -660,6 +658,8 @@ vao->set_wireframe_index_buffer(wireframe_data.data(), wireframe_data.size());
 
 gl::VertexArray* vao_raw = vao.get();
 vaos.push_back(std::move(vao));
+
+bones_ubo = renderer_utils::create_bones_ubo(*shader, ctx, bones_count());
 
 // reactive geoset array
 if (reactive)
@@ -1542,7 +1542,7 @@ bone_remap_table[i] = static_cast<int16_t>(found >= 0 ? found : static_cast<int>
 use_external_bones = true;
 }
 
-void M2RendererGL::applyExternalBoneMatrices(const float* char_bone_matrices, size_t matrix_count) {
+void M2RendererGL::applyExternalBoneMatrices(const float* char_bone_matrices, size_t float_count) {
 if (bone_remap_table.empty() || bone_matrices.empty() || !char_bone_matrices)
 return;
 
@@ -1551,7 +1551,7 @@ const size_t char_idx = static_cast<size_t>(bone_remap_table[i]);
 const size_t char_offset = char_idx * 16;
 const size_t local_offset = i * 16;
 
-if (char_offset + 16 <= matrix_count)
+if (char_offset + 16 <= float_count)
 std::memcpy(&bone_matrices[local_offset], &char_bone_matrices[char_offset], 16 * sizeof(float));
 }
 }
@@ -2083,9 +2083,18 @@ return std::nullopt;
 
 // try m2 first, then skelLoader (modern character models use .skel files)
 const M2Attachment* attachment = m2->getAttachmentById(attachmentId);
+std::optional<M2Attachment> skel_attachment_copy;
 if (!attachment && skelLoader) {
 const auto* skel_att = skelLoader->getAttachmentById(attachmentId);
-attachment = reinterpret_cast<const M2Attachment*>(skel_att);
+if (skel_att) {
+	skel_attachment_copy.emplace();
+	skel_attachment_copy->id = skel_att->id;
+	skel_attachment_copy->bone = skel_att->bone;
+	skel_attachment_copy->unknown = skel_att->unknown;
+	skel_attachment_copy->position = skel_att->position;
+	skel_attachment_copy->animateAttached = skel_att->animateAttached;
+	attachment = &*skel_attachment_copy;
+}
 }
 
 if (!attachment)

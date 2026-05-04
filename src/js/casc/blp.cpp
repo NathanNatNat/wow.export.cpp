@@ -221,8 +221,10 @@ uint8_t BLPImage::_getAlpha(int index) const {
 			return (byte & (0x01 << (index % 8))) == 0 ? 0x00 : 0xFF;
 
 		case 4:
+			if (index % 2 != 0)
+				return 0;
 			byte = rawData_[scaledLength_ + (index / 2)];
-			return static_cast<uint8_t>((index % 2 == 0) ? ((byte & 0x0F) << 4) : (byte & 0xF0));
+			return static_cast<uint8_t>((byte & 0x0F) << 4);
 
 		case 8:
 			return rawData_[scaledLength_ + index];

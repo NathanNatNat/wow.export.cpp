@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 20/98 verified (20%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 30/98 verified (31%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -102,54 +102,54 @@
   - **Status**: Verified — fixed; changed `rotW` to `std::optional<float>`, writes empty string when not set (matching JS `undefined` → empty field behavior)
   - **Details**: For M2 doodad models, `model.rotation` is a 3-element array (Euler angles). JS `model.Rotation?.[3] ?? model.rotation[3]` evaluates to `undefined` since neither `Rotation[3]` nor `rotation[3]` exists on a 3-element array. The JS CSVWriter converts `undefined` to an empty string `""`. C++ (ADTExporter.cpp L1496–1514) initializes `rotW = 0.0f` and writes `"0.000000"` to the CSV. The output differs: JS produces an empty field, C++ produces `"0.000000"`.
 
-- [ ] 21. [WMOExporter.cpp] CSV float values use `std::to_string()` producing verbose 6-decimal notation instead of JS minimal notation
+- [x] 21. [WMOExporter.cpp] CSV float values use `std::to_string()` producing verbose 6-decimal notation instead of JS minimal notation
   - **JS Source**: `src/js/3D/exporters/WMOExporter.js` lines 611–619 and 1082–1091
-  - **Status**: Pending
+  - **Status**: Verified — fixed; replaced `std::to_string()` with `std::format("{:g}", ...)` for all float CSV fields in both `exportAsOBJ` and `exportGroupsAsSeparateOBJ` doodad CSV rows
   - **Details**: In `exportAsOBJ` (WMOExporter.cpp L783–790) and `exportGroupsAsSeparateOBJ` (L1354–1361), doodad CSV position/rotation/scale float values are written via `std::to_string()`, which produces fixed-point notation with 6 decimal places (e.g. `"1.000000"`, `"0.000000"`). JS passes raw numbers to the CSV writer, which uses JavaScript's `Number.toString()` producing minimal notation (e.g. `"1"`, `"0"`). The WMOLegacyExporter C++ correctly uses `std::format("{:g}", ...)` to match JS. The retail WMOExporter should do the same for byte-identical CSV output.
 
-- [ ] 22. [M2RendererGL.cpp] bones_ubo created before skeleton is loaded with bone_count=0
+- [x] 22. [M2RendererGL.cpp] bones_ubo created before skeleton is loaded with bone_count=0
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 567, 730–733
-  - **Status**: Pending
+  - **Status**: Verified — fixed; moved `bones_ubo` creation from `load()` to inside `loadSkin()` after `_create_skeleton()` and VAO setup, matching JS placement at line 567
   - **Details**: JS calls `_create_bones_ubo()` from inside `loadSkin()` (line 567) after `_create_skeleton()` (line 491), so the UBO is allocated with the correct bone count and pre-filled with identity matrices. C++ (M2RendererGL.cpp L483) calls `renderer_utils::create_bones_ubo(*shader, ctx, bones_count())` in `load()` before `loadSkin()` is called. At this point `bones_count()` returns 0 because `_create_skeleton()` hasn't executed yet. The UBO itself has full capacity (based on shader block size), but 0 identity matrices are pre-filled. If any render occurs before the first bone matrix update, the UBO contains uninitialized data instead of identity matrices.
 
-- [ ] 23. [M2RendererGL.cpp] Unsafe reinterpret_cast of SKELAttachment to M2Attachment in getAttachmentTransform
+- [x] 23. [M2RendererGL.cpp] Unsafe reinterpret_cast of SKELAttachment to M2Attachment in getAttachmentTransform
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` lines 1856–1858
-  - **Status**: Pending
+  - **Status**: Verified — fixed; replaced `reinterpret_cast` with field-by-field copy into a local `M2Attachment`, matching JS duck-typing semantics safely
   - **Details**: JS `getAttachmentTransform` uses duck typing — `this.skelLoader.getAttachmentById()` returns an object with the same shape as M2 attachments (bone, position). C++ (M2RendererGL.cpp L2087–2088) uses `reinterpret_cast<const M2Attachment*>(skel_att)` to convert a `SKELAttachment*` to `M2Attachment*`. This is undefined behavior if the struct layouts differ. Should use a proper conversion or a common interface/struct.
 
-- [ ] 24. [M3RendererGL.cpp] Double dispose of bones_ubo in dispose()
+- [x] 24. [M3RendererGL.cpp] Double dispose of bones_ubo in dispose()
   - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 307–329
-  - **Status**: Pending
+  - **Status**: Verified — fixed; removed redundant second `bones_ubo` dispose block from `dispose()`, matching JS which only disposes via `_dispose_geometry()`
   - **Details**: C++ `dispose()` (M3RendererGL.cpp L323–335) calls `_dispose_geometry()` which disposes `bones_ubo` at lines 310–313, then `dispose()` itself disposes `bones_ubo` again at lines 326–329. The null guard prevents a crash, but this is redundant code not present in JS. JS `dispose()` only calls `_dispose_geometry()` (which handles ubos) then handles `default_texture`. The second dispose in C++ should be removed.
 
-- [ ] 25. [JSONWriter.cpp] Missing BigInt serialization handling in write()
+- [x] 25. [JSONWriter.cpp] Missing BigInt serialization handling in write()
   - **JS Source**: `src/js/3D/writers/JSONWriter.js` lines 40–43
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `convertBigIntsToStrings()` helper that recursively walks the JSON tree and converts integers exceeding `Number.MAX_SAFE_INTEGER` to strings before serialization
   - **Details**: JS `write()` uses `JSON.stringify` with a custom replacer that converts `BigInt` values to strings: `typeof value === 'bigint' ? value.toString() : value`. C++ (JSONWriter.cpp L24) uses `data.dump(1, '\t')` with no equivalent handling. nlohmann::json stores large integers as `int64_t`/`uint64_t` and serializes them as numbers. If any caller stores values that were `BigInt` in JS, the C++ output would contain numeric integers where JS output contained quoted strings. The JS code explicitly handles this case, suggesting BigInt values do occur in practice.
 
-- [ ] 26. [M3RendererGL.cpp] bones_ubo created in load() but destroyed by loadLOD() and never recreated
+- [x] 26. [M3RendererGL.cpp] bones_ubo created in load() but destroyed by loadLOD() and never recreated
   - **JS Source**: `src/js/3D/renderers/M3RendererGL.js` lines 59–71, 79–81, 147
-  - **Status**: Pending
+  - **Status**: Verified — fixed; moved `bones_ubo` creation from `load()` to inside `loadLOD()` after VAO setup, matching JS placement at line 147
   - **Details**: JS calls `_create_bones_ubo()` inside `loadLOD()` at line 147, after `_dispose_geometry()` at line 84, so the UBO is always valid after loading. C++ creates `bones_ubo` in `load()` at line 45, then calls `loadLOD(0)` at line 50. Inside `loadLOD()`, `_dispose_geometry()` at line 64 destroys the bones_ubo (lines 310–313) and never recreates it. After `load()` completes, `bones_ubo.ubo` is null. In `render()`, the `if (bones_ubo.ubo)` check at line 229 fails, so the identity bone matrix is never uploaded or bound. The shader receives `u_bone_count = 1` but has no UBO data, causing undefined rendering for all M3 models. Fix: move the `bones_ubo` creation from `load()` into `loadLOD()` after `_dispose_geometry()`, matching JS placement.
 
-- [ ] 27. [M2RendererGL.cpp] `applyExternalBoneMatrices` bounds check compares float-offset against bone-count
+- [x] 27. [M2RendererGL.cpp] `applyExternalBoneMatrices` bounds check compares float-offset against bone-count
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` line 1345
-  - **Status**: Pending
+  - **Status**: Verified — fixed; renamed parameter to `float_count` and changed all call sites to pass `char_bone_matrices.size()` (float count) instead of `char_bone_matrices.size() / 16`
   - **Details**: JS checks `if (char_offset + 16 <= char_bone_matrices.length)` where `char_offset = char_idx * 16` (float index) and `.length` is the total float count (e.g., 1600 for 100 bones). C++ (M2RendererGL.cpp L1554) checks `if (char_offset + 16 <= matrix_count)` where `matrix_count` is passed as `vector.size() / 16` (bone count, e.g., 100) from call sites at model-viewer-gl.cpp L507/L539 and CharacterExporter.cpp L313. This compares a float-offset (e.g., 1584 for bone 99) against a bone count (100), so `1584 + 16 <= 100` is always false for any bone index > ~5. All external bone matrix copies beyond the first few bones silently fail, breaking collection model rigging. Fix: callers should pass `char_bone_matrices.size()` (float count) instead of `char_bone_matrices.size() / 16`.
 
-- [ ] 28. [M2RendererGL.cpp] `submesh_colors` initialized to 1.0 instead of 0.0
+- [x] 28. [M2RendererGL.cpp] `submesh_colors` initialized to 1.0 instead of 0.0
   - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` line 423
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed initialization from `1.0f` to `0.0f` to match JS `Float32Array` zero-fill
   - **Details**: JS initializes `this.submesh_colors = new Float32Array(this.m2.colors.length * 4)` which zero-fills. C++ (M2RendererGL.cpp L495) uses `submesh_colors.assign(m2->colors.size() * 4, 1.0f)` which fills with 1.0. Before any animation plays, submeshes with a valid `color_idx` will have RGBA=(0,0,0,0) in JS (invisible, skipped by `alpha <= 0` check) but RGBA=(1,1,1,1) in C++ (fully visible). This is a visual difference in the initial render state before `playAnimation` or `stopAnimation` is called. Fix: change to `submesh_colors.assign(m2->colors.size() * 4, 0.0f)`.
 
-- [ ] 29. [file-writer.cpp] FileWriter opens in text mode, producing `\r\n` line endings on Windows
+- [x] 29. [file-writer.cpp] FileWriter opens in text mode, producing `\r\n` line endings on Windows
   - **JS Source**: `src/js/file-writer.js` line 38
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added `std::ios::binary` to both `stream.open()` calls to prevent `\r\n` translation on Windows
   - **Details**: C++ `FileWriter` (file-writer.cpp L12) opens with `std::ios::out | std::ios::trunc` (no `std::ios::binary`). On Windows, `std::ofstream` in text mode translates every `\n` to `\r\n`. JS `fs.createWriteStream` does NOT do line-ending translation — `line + '\n'` always produces a literal `\n` (0x0A) on all platforms. This affects all files written via FileWriter: CSV (CSVWriter), SQL (SQLWriter), JSON (JSONWriter), OBJ (OBJWriter), and MTL (MTLWriter). Every exported file from these writers will have `\r\n` on Windows in C++ vs `\n` in JS. Fix: add `std::ios::binary` to the open flags at file-writer.cpp L12 and L18.
 
-- [ ] 30. [blp.cpp] `_getAlpha` case 4 (alphaDepth=4) uses integer division instead of reproducing JS float-division bug
+- [x] 30. [blp.cpp] `_getAlpha` case 4 (alphaDepth=4) uses integer division instead of reproducing JS float-division bug
   - **JS Source**: `src/js/casc/blp.js` line 294
-  - **Status**: Pending
+  - **Status**: Verified — fixed; odd indices now return 0 immediately, reproducing JS behavior where float array index returns `undefined` and `undefined & 0xF0` evaluates to 0
   - **Details**: JS `_getAlpha` case 4 reads `this.rawData[this.scaledLength + (index / 2)]`. In JS, `index / 2` for odd indices produces a float (e.g. `3/2 = 1.5`). Accessing a JS Array with a float index returns `undefined`, and `undefined & 0xF0` evaluates to `0`. So for odd-indexed pixels with alphaDepth=4, JS returns alpha=0. C++ (blp.cpp L224) uses `rawData_[scaledLength_ + (index / 2)]` where integer division truncates (e.g. `3/2 = 1`), reading the correct byte and returning the actual high-nibble alpha value. The JS code has a bug (should use `Math.floor(index / 2)` like case 1 does), but per CLAUDE.md the C++ must reproduce the JS behavior. For odd pixels with alphaDepth=4, JS produces alpha=0 while C++ produces the correct alpha. Fix: for odd indices, return 0 to match JS, or use a float division that truncates the array index to reproduce the `undefined` access.
 
 - [ ] 31. [item-picker-modal.cpp] Missing item database initialization when items are not yet loaded

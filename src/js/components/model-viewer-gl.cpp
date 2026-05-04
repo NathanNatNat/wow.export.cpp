@@ -504,7 +504,7 @@ static void render_scene(State& state, Context& context) {
 				// collection-style models (e.g. backpacks) need bone matrix remapping
 				if (entry.is_collection_style) {
 					if (!char_bone_matrices.empty())
-						entry.renderer->applyExternalBoneMatrices(char_bone_matrices.data(), char_bone_matrices.size() / 16);
+						entry.renderer->applyExternalBoneMatrices(char_bone_matrices.data(), char_bone_matrices.size());
 
 					if (char_model_matrix)
 						entry.renderer->setTransformMatrix(char_model_matrix);
@@ -536,7 +536,7 @@ static void render_scene(State& state, Context& context) {
 
 				// apply remapped bone matrices for proper rigging
 				if (!char_bone_matrices.empty())
-					renderer->applyExternalBoneMatrices(char_bone_matrices.data(), char_bone_matrices.size() / 16);
+					renderer->applyExternalBoneMatrices(char_bone_matrices.data(), char_bone_matrices.size());
 
 				// use character's model transform (rotation from controls)
 				if (char_model_matrix)
