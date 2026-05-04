@@ -1233,10 +1233,22 @@ void render() {
 		if (is_streaming || view.videoPlayerState) {
 			if (!current_video_url.empty() && mpv_render_ctx) {
 				ImVec2 avail = ImGui::GetContentRegionAvail();
-				int render_w = static_cast<int>(avail.x);
-				int render_h = static_cast<int>(avail.y);
+				ImVec2 container_pos = ImGui::GetCursorScreenPos();
+
+				int64_t vid_w = 0, vid_h = 0;
+				mpv_get_property(mpv_ctx, "dwidth", MPV_FORMAT_INT64, &vid_w);
+				mpv_get_property(mpv_ctx, "dheight", MPV_FORMAT_INT64, &vid_h);
+				if (vid_w <= 0 || vid_h <= 0) { vid_w = 16; vid_h = 9; }
+
+				float scale = std::min(avail.x / static_cast<float>(vid_w),
+				                       avail.y / static_cast<float>(vid_h));
+				int render_w = static_cast<int>(vid_w * scale);
+				int render_h = static_cast<int>(vid_h * scale);
 				if (render_w < 1) render_w = 1;
 				if (render_h < 1) render_h = 1;
+
+				float offset_x = (avail.x - render_w) * 0.5f;
+				float offset_y = (avail.y - render_h) * 0.5f;
 
 				if (render_w != mpv_video_width || render_h != mpv_video_height) {
 					mpv_video_width = render_w;
@@ -1266,7 +1278,13 @@ void render() {
 					mpv_render_context_render(mpv_render_ctx, render_params);
 				}
 
-				ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+				ImDrawList* bg_dl = ImGui::GetWindowDrawList();
+				bg_dl->AddRectFilled(container_pos,
+					ImVec2(container_pos.x + avail.x, container_pos.y + avail.y),
+					IM_COL32(0, 0, 0, 255));
+
+				ImVec2 img_pos(container_pos.x + offset_x, container_pos.y + offset_y);
+				ImGui::SetCursorScreenPos(img_pos);
 
 				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(mpv_texture)),
 					ImVec2(static_cast<float>(render_w), static_cast<float>(render_h)),
@@ -1290,8 +1308,8 @@ void render() {
 
 				const float bar_height = 36.0f;
 				const float bar_pad = 8.0f;
-				ImVec2 bar_min(cursor_pos.x, cursor_pos.y + render_h - bar_height);
-				ImVec2 bar_max(cursor_pos.x + render_w, cursor_pos.y + render_h);
+				ImVec2 bar_min(img_pos.x, img_pos.y + render_h - bar_height);
+				ImVec2 bar_max(img_pos.x + render_w, img_pos.y + render_h);
 
 				ImDrawList* dl = ImGui::GetWindowDrawList();
 				dl->AddRectFilled(bar_min, bar_max, IM_COL32(0, 0, 0, 180));
@@ -1358,6 +1376,8 @@ void render() {
 				}
 				if (ImGui::IsItemHovered())
 					ImGui::SetTooltip("Toggle Fullscreen");
+
+				ImGui::SetCursorScreenPos(ImVec2(container_pos.x, container_pos.y + avail.y));
 
 			} else if (poll_active) {
 				ImGui::TextUnformatted("Video is being processed, please wait...");
