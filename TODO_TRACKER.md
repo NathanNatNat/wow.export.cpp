@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 0/86 verified (0%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 0/89 verified (0%)** — ✅ = Verified, ⬜ = Pending
 
 - [ ] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -431,3 +431,18 @@
   - **JS Source**: `src/js/modules/tab_zones.js` lines 126–133
   - **Status**: Pending
   - **Details**: JS groups tiles by layer using `tile.LayerIndex || 0`, defaulting missing/undefined `LayerIndex` to 0, so those tiles appear in layer 0 and are rendered. C++ `render_map_tiles` (tab_zones.cpp L402–414) re-fetches tiles and filters by `LayerIndex`. When a tile has no `LayerIndex` field, `tile.find("LayerIndex")` returns `end()`, and the tile is excluded entirely — it never reaches the `tile_layer == layer_index` comparison. Note: the C++ `render_zone_to_canvas` (L369–370) correctly defaults missing `LayerIndex` to 0 during grouping, but this grouping result is discarded because `render_map_tiles` re-fetches from DB2. Fix: either pass the pre-grouped tiles to `render_map_tiles` (matching JS), or add a `LayerIndex` default of 0 when the field is missing in the filter at L404.
+
+- [ ] 87. [tab_zones.cpp] `export_zone_map` WebP quality value misinterpreted — all zone WebP exports use lossless
+  - **JS Source**: `src/js/modules/tab_zones.js` line 483; `src/js/buffer.js` line 89
+  - **Status**: Pending
+  - **Details**: Same class of bug as #82 but in `tab_zones.cpp`'s export path. Line 1136 reads `exportWebPQuality` as `float` with default `0.9f`, then multiplies by 100: `int webp_quality = static_cast<int>(webp_quality_val * 100.0f)`. The config stores quality as integer 1–100, so `nlohmann::json::value()` converts integer `75` to float `75.0f`, then `75.0f * 100.0f = 7500`. Since `7500 >= 100`, the lossless branch always executes. Fix: read as `int` with default `90` and use directly, triggering lossless only when quality == 100.
+
+- [ ] 88. [tab_textures.cpp] Atlas region crop clips entire rows instead of per-pixel when region extends beyond BLP bounds
+  - **JS Source**: `src/js/modules/tab_textures.js` line 246
+  - **Status**: Pending
+  - **Details**: JS `ctx.getImageData(region.left, region.top, region.width, region.height)` clips to canvas bounds on a per-pixel basis — when a region's right edge extends past the image width, valid pixels from the left portion of the row are still captured, and out-of-bounds pixels are zero-filled. C++ (tab_textures.cpp L394–399) uses a row-level bounds check: `if (src_offset + region.width * 4 <= static_cast<int>(rgba_data.size()))`. If the entire row doesn't fit in the source buffer, the whole row is skipped (not just the out-of-bounds portion). The cropped buffer is zero-initialized so skipped rows produce zero-fill, but partially-valid pixels at the start of the row are lost. Fix: clamp the copy width per-row to `min(region.width, blp_width - region.left)` and only copy the valid portion.
+
+- [ ] 89. [audio-helper.cpp] `detectFileType` checks all MP3 prefixes from offset 0, fixing a JS `startsWith` bug
+  - **JS Source**: `src/js/ui/audio-helper.js` line 166; `src/js/buffer.js` lines 592–603
+  - **Status**: Pending
+  - **Details**: JS calls `data.startsWith(['ID3', '\xFF\xFB', '\xFF\xF3', '\xFF\xF2'])`. The `BufferWrapper.startsWith(array)` method (buffer.js L592–603) calls `this.seek(0)` once, then iterates each entry calling `readString(entry.length)` which advances the internal read position. The second entry (`\xFF\xFB`) is checked at offset 3 (after `'ID3'` was read), the third at offset 5, the fourth at offset 7 — NOT from position 0. Files starting with MP3 sync bytes (`\xFF\xFB`, `\xFF\xF3`, `\xFF\xF2`) would be detected as `AUDIO_TYPE_UNKNOWN` in JS. C++ (audio-helper.cpp L29–37) checks ALL prefixes from offset 0 using `std::memcmp(raw.data(), ...)`, so MP3 files without an ID3 tag ARE correctly detected. The C++ is more correct but deviates from JS. Per project rules, JS bugs should be reproduced unless impossible in C++.
