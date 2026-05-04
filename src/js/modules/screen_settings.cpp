@@ -44,7 +44,7 @@ static bool multiButtonSegment(const char* label, bool selected) {
 }
 
 static void handle_cache_clear();
-static void handle_tact_key();
+static bool handle_tact_key();
 void handle_discard();
 void handle_apply();
 void handle_reset();
@@ -510,9 +510,10 @@ void render() {
 		if (ImGui::Button("Add##tactkey")) {
 			view.userInputTactKeyName = key_name_buf;
 			view.userInputTactKey     = key_val_buf;
-			handle_tact_key();
-			key_name_buf[0] = '\0';
-			key_val_buf[0]  = '\0';
+			if (handle_tact_key()) {
+				key_name_buf[0] = '\0';
+				key_val_buf[0]  = '\0';
+			}
 		}
 	}
 
@@ -628,11 +629,13 @@ static void handle_cache_clear() {
 		core::events.emit("click-cache-clear");
 }
 
-static void handle_tact_key() {
-	if (casc::tact_keys::addKey(core::view->userInputTactKeyName, core::view->userInputTactKey))
+static bool handle_tact_key() {
+	if (casc::tact_keys::addKey(core::view->userInputTactKeyName, core::view->userInputTactKey)) {
 		core::setToast("success", "Successfully added decryption key.");
-	else
-		core::setToast("error", "Invalid encryption key.", {}, -1);
+		return true;
+	}
+	core::setToast("error", "Invalid encryption key.", {}, -1);
+	return false;
 }
 
 void handle_discard() {
@@ -702,7 +705,7 @@ void handle_apply() {
 	{
 		std::string val = cfg.value("dbdFilenameURL", std::string{});
 		if (val.empty() || val.substr(0, 4) != "http") {
-			core::setToast("error", "A valid URL is required for DBD manifest.",
+			core::setToast("error", "A valid URL is required for DBD manfiest.",
 				{ {"Use Default", [&cfg, defaults]() { cfg["dbdFilenameURL"] = defaults["dbdFilenameURL"]; }} }, -1);
 			return;
 		}

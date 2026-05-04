@@ -571,7 +571,16 @@ static void init_cdn_pings() {
 				return;
 
 			auto& regions = core::view->cdnRegions;
-			nlohmann::json selected_region = core::view->selectedCDNRegion;
+
+			std::string selected_tag = core::view->selectedCDNRegion.value("tag", "");
+			int64_t selected_delay = -1;
+			for (const auto& region : regions) {
+				if (region.value("tag", "") == selected_tag &&
+					region.contains("delay") && region["delay"].is_number()) {
+					selected_delay = region["delay"].get<int64_t>();
+					break;
+				}
+			}
 
 			for (const auto& region : regions) {
 				if (!region.contains("delay") || region["delay"].is_null() || !region["delay"].is_number())
@@ -581,11 +590,9 @@ static void init_cdn_pings() {
 				if (delay < 0)
 					continue;
 
-				if (selected_region.contains("delay") && selected_region["delay"].is_number() &&
-					delay < selected_region["delay"].get<int64_t>()) {
+				if (selected_delay >= 0 && delay < selected_delay) {
 					core::view->selectedCDNRegion = region;
 					casc::cdn_resolver::startPreResolution(region["tag"].get<std::string>());
-					selected_region = region;
 				}
 			}
 		});
@@ -596,7 +603,7 @@ static void click_source_local() {
 	if (core::view->isBusy)
 		return;
 
-	std::string selected = pfd::select_folder("Select Directory").result();
+	std::string selected = pfd::select_folder("Select World of Warcraft Installation").result();
 	if (!selected.empty())
 		open_local_install(selected);
 }
@@ -665,7 +672,7 @@ static void click_source_legacy() {
 	if (core::view->isBusy)
 		return;
 
-	std::string selected = pfd::select_folder("Select Directory").result();
+	std::string selected = pfd::select_folder("Select Legacy MPQ Installation").result();
 	if (!selected.empty())
 		open_legacy_install(selected);
 }

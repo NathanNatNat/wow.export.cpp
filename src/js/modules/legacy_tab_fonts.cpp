@@ -35,7 +35,7 @@ static std::string get_font_id(const std::string& file_name) {
 	for (char c : file_name)
 		hash = (hash << 5) - hash + static_cast<unsigned char>(c);
 
-	return "font_legacy_" + std::to_string(std::abs(static_cast<int32_t>(hash)));
+	return "font_legacy_" + std::to_string(std::abs(static_cast<int64_t>(static_cast<int32_t>(hash))));
 }
 
 static void* load_font(const std::string& file_name) {
@@ -166,7 +166,7 @@ void render() {
 			"font",
 			nullptr,
 			false,
-			"legacy-fonts",
+			"fonts",
 			{},
 			false,
 			listbox_state,

@@ -264,7 +264,7 @@ void render() {
 			listbox::CopyMode::Default,
 			view.config.value("pasteSelection", false),
 			view.config.value("removePathSpacesCopy", false),
-			"",
+			"dbc file",
 			nullptr,
 			false,
 			"",
@@ -280,6 +280,11 @@ void render() {
 		);
 	}
 	app::layout::EndListContainer();
+
+	if (app::layout::BeginStatusBar("legacy-dbc-status", regions)) {
+		listbox::renderStatusBar("dbc file", {}, listbox_dbc_state);
+	}
+	app::layout::EndStatusBar();
 
 	if (app::layout::BeginFilterBar("dbc-filter", regions)) {
 		if (view.config.value("regexFilters", false)) {

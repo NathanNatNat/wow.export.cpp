@@ -1,6 +1,6 @@
 # TODO Tracker
 
-> **Progress: 40/98 verified (41%)** — ✅ = Verified, ⬜ = Pending
+> **Progress: 50/98 verified (51%)** — ✅ = Verified, ⬜ = Pending
 
 - [x] 1. [external-links.cpp] Missing STATIC_LINKS map and `::` prefix resolution in `open()`
   - **JS Source**: `src/js/external-links.js` lines 12–35
@@ -202,54 +202,54 @@
   - **Status**: Verified — fixed; changed `isLocal` from `true` to `false` in `exportFiles()` call
   - **Details**: JS calls `textureExporter.exportFiles(selected, false, -1, true)` — `isLocal=false`, `exportID=-1`, `isMPQ=true`. C++ (legacy_tab_textures.cpp L417) calls `texture_exporter::exportFiles(selected, nullptr, core::view->mpq.get(), true, -1)` — `isLocal=true`, `exportID=-1`. The `true` for `isLocal` causes three problems: (1) line 209 forces `overwriteFiles=true` regardless of user config, (2) line 231 skips `exportNamedFiles` renaming, (3) line 241 uses the raw MPQ filename as the export path without prepending the configured export directory. Fix: change `true` to `false` at legacy_tab_textures.cpp L417.
 
-- [ ] 41. [screen_source_select.cpp] CDN auto-selection for fastest region never works
+- [x] 41. [screen_source_select.cpp] CDN auto-selection for fastest region never works
   - **JS Source**: `src/js/modules/screen_source_select.js` lines 219–249
-  - **Status**: Pending
+  - **Status**: Verified — fixed; replaced copy-based `selected_region` with tag-based lookup into the regions array to retrieve the actual delay value
   - **Details**: JS sets `selectedCDNRegion` to the same `node` object reference that lives in the `regions` array. When pings complete and `node.delay = ms` is executed, it mutates the same object. By `Promise.all` time, `selected_region.delay` has a numeric value, so the fastest-region comparison works. C++ (screen_source_select.cpp L530) copies the JSON node into `selectedCDNRegion`. When pings update `regions[index]["delay"]` at L557, `selectedCDNRegion["delay"]` remains `null`. At L584, `selected_region["delay"].is_number()` fails because `delay` is null, so no region ever replaces the default. The "auto-select fastest CDN" feature is completely broken. Fix: when the initial `selected_region.delay` is null, treat any valid region with positive delay as better; or update `selectedCDNRegion["delay"]` when the corresponding region's ping completes.
 
-- [ ] 42. [screen_source_select.cpp] Missing "Visit Support Discord" action in CASC load error toasts
+- [x] 42. [screen_source_select.cpp] Missing "Visit Support Discord" action in CASC load error toasts
   - **JS Source**: `src/js/modules/screen_source_select.js` lines 134–137
-  - **Status**: Pending
+  - **Status**: Verified — intentional deviation documented in DEVIATIONS.md (static external links deliberately removed; Discord toast actions explicitly noted as removed)
   - **Details**: JS CASC load error toast has two actions: `'View Log'` and `'Visit Support Discord': () => ExternalLinks.open('::DISCORD')`. C++ (screen_source_select.cpp L314–317, L338–341) only has `'View Log'` in both the local and remote CASC load error paths. The "Visit Support Discord" button is missing from both. Fix: add `{"Visit Support Discord", []() { external_links::open("::DISCORD"); }}` to both toast action lists.
 
-- [ ] 43. [screen_settings.cpp] JS typo "manfiest" silently corrected to "manifest"
+- [x] 43. [screen_settings.cpp] JS typo "manfiest" silently corrected to "manifest"
   - **JS Source**: `src/js/modules/screen_settings.js` line 445
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed "manifest" back to "manfiest" to reproduce JS typo
   - **Details**: JS has `'A valid URL is required for DBD manfiest.'` (typo: "manfiest"). C++ (screen_settings.cpp L705) has `"A valid URL is required for DBD manifest."` (corrected: "manifest"). Per CLAUDE.md rules ("Do not 'fix' perceived JS bugs"), the C++ should reproduce the exact typo. Fix: change "manifest" back to "manfiest" at screen_settings.cpp L705.
 
-- [ ] 44. [legacy_tab_fonts.cpp] `get_font_id` has undefined behavior when hash equals `0x80000000`
+- [x] 44. [legacy_tab_fonts.cpp] `get_font_id` has undefined behavior when hash equals `0x80000000`
   - **JS Source**: `src/js/modules/legacy_tab_fonts.js` lines 12–15
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed to `std::abs(static_cast<int64_t>(static_cast<int32_t>(hash)))` so INT32_MIN correctly produces 2147483648
   - **Details**: JS `get_font_id` computes `hash = ((hash << 5) - hash + charCode) | 0` (signed 32-bit coercion) then returns `'font_legacy_' + Math.abs(hash)`. `Math.abs(-2147483648)` safely returns `2147483648` (float64). C++ (legacy_tab_fonts.cpp L38) does `std::to_string(std::abs(static_cast<int32_t>(hash)))`. If `hash` is exactly `0x80000000`, `static_cast<int32_t>` gives `INT32_MIN` and `std::abs(INT32_MIN)` is undefined behavior in C++ (positive value overflows int32_t). On most implementations it returns `-2147483648`, producing `"font_legacy_-2147483648"` instead of JS's `"font_legacy_2147483648"`. Fix: use `static_cast<int64_t>(static_cast<int32_t>(hash))` before `std::abs`, or special-case `0x80000000`.
 
-- [ ] 45. [screen_settings.cpp] "Add Encryption Key" input buffers cleared unconditionally after handle_tact_key()
+- [x] 45. [screen_settings.cpp] "Add Encryption Key" input buffers cleared unconditionally after handle_tact_key()
   - **JS Source**: `src/js/modules/screen_settings.js` lines 295–297, 401–405
-  - **Status**: Pending
+  - **Status**: Verified — fixed; `handle_tact_key()` now returns bool, buffers only cleared on success
   - **Details**: JS `handle_tact_key()` does not clear the `userInputTactKeyName` or `userInputTactKey` view properties after calling `tactKeys.addKey()`. On success or failure, the text inputs retain their values, allowing the user to correct and retry on failure. C++ (screen_settings.cpp L514–515) unconditionally sets `key_name_buf[0] = '\0'` and `key_val_buf[0] = '\0'` after `handle_tact_key()`, clearing both fields regardless of whether the key was successfully added. On failure, the user loses their input and must re-enter both the key name and key value. Fix: only clear the buffers when `addKey` returns true (success), not on failure.
 
-- [ ] 46. [screen_source_select.cpp] Folder dialog titles are generic instead of matching JS descriptive titles
+- [x] 46. [screen_source_select.cpp] Folder dialog titles are generic instead of matching JS descriptive titles
   - **JS Source**: `src/js/modules/screen_source_select.js` lines 329–336
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed local to "Select World of Warcraft Installation" and legacy to "Select Legacy MPQ Installation"
   - **Details**: JS sets descriptive directory dialog titles: "Select World of Warcraft Installation" for local CASC (line 330) and "Select Legacy MPQ Installation" for legacy (line 336). C++ (screen_source_select.cpp L599, L668) uses the generic title "Select Directory" for both `pfd::select_folder()` calls. Fix: change local to `pfd::select_folder("Select World of Warcraft Installation")` and legacy to `pfd::select_folder("Select Legacy MPQ Installation")`.
 
-- [ ] 47. [legacy_tab_data.cpp] DBC listbox missing `unittype` and status bar
+- [x] 47. [legacy_tab_data.cpp] DBC listbox missing `unittype` and status bar
   - **JS Source**: `src/js/modules/legacy_tab_data.js` line 131
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed unittype to "dbc file" and added BeginStatusBar/renderStatusBar/EndStatusBar block
   - **Details**: JS DBC listbox sets `unittype="dbc file"` which enables the status bar text showing the number of DBC files found. C++ (legacy_tab_data.cpp L267) passes `""` for the unittype parameter, suppressing the status text. Additionally, unlike every other legacy tab (audio, files, fonts, textures) which all have an explicit `app::layout::BeginStatusBar` / `listbox::renderStatusBar` block, `legacy_tab_data` has none for the DBC listbox (between EndListContainer at L282 and BeginFilterBar at L284). Fix: change unittype from `""` to `"dbc file"` at L267, and add a status bar block between L282 and L284.
 
-- [ ] 48. [legacy_tab_fonts.cpp] `persistscrollkey` is `"legacy-fonts"` instead of `"fonts"`
+- [x] 48. [legacy_tab_fonts.cpp] `persistscrollkey` is `"legacy-fonts"` instead of `"fonts"`
   - **JS Source**: `src/js/modules/legacy_tab_fonts.js` line 63
-  - **Status**: Pending
+  - **Status**: Verified — fixed; changed persist scroll key from "legacy-fonts" to "fonts"
   - **Details**: JS Listbox sets `persistscrollkey="fonts"` for the font file list. C++ (legacy_tab_fonts.cpp L169) passes `"legacy-fonts"` as the persist scroll key parameter. This means scroll position is stored under a different key than what JS uses, so scroll position would not carry over if persistence is ever shared between the two implementations, and it's a deviation from the JS source. Fix: change `"legacy-fonts"` to `"fonts"` at legacy_tab_fonts.cpp L169.
 
-- [ ] 49. [screen_source_select.cpp] CDN auto-selection loop finds absolute fastest instead of last-below-default
+- [x] 49. [screen_source_select.cpp] CDN auto-selection loop finds absolute fastest instead of last-below-default
   - **JS Source**: `src/js/modules/screen_source_select.js` lines 239–248
-  - **Status**: Pending
+  - **Status**: Verified — fixed; removed `selected_region = region` update so loop always compares against the original default's delay, matching JS semantics
   - **Details**: In the CDN fastest-region selection loop (after all pings), JS sets `let selected_region = this.$core.view.selectedCDNRegion` which is a reference to the original default region object. The loop compares each `region.delay < selected_region.delay` but does NOT update `selected_region` — so every region is compared against the original default's delay. If US=100ms, EU=50ms, KR=75ms: EU (50<100) sets selectedCDNRegion=EU, then KR (75<100) overwrites to KR. The last region below the default wins. C++ (screen_source_select.cpp L588) adds `selected_region = region` which updates the local tracker, so it finds the absolute lowest delay (EU=50ms wins). While C++ behavior is arguably better, it deviates from JS. Note: this is currently unreachable due to TODO #41 (delay stays null), but would matter once #41 is fixed. Fix: remove line 588 (`selected_region = region;`) to match JS behavior.
 
-- [ ] 50. [legacy_tab_audio.cpp] Filter bar "Regex Enabled" missing tooltip and SameLine
+- [x] 50. [legacy_tab_audio.cpp] Filter bar "Regex Enabled" missing tooltip and SameLine
   - **JS Source**: `src/js/modules/legacy_tab_audio.js` line 212
-  - **Status**: Pending
+  - **Status**: Verified — fixed; added IsItemHovered/SetTooltip and SameLine to match sibling legacy tabs
   - **Details**: JS filter bar `<div class="regex-info" v-if="..." :title="$core.view.regexTooltip">Regex Enabled</div>` has a tooltip on hover (`:title`) and is displayed inline with the filter input. C++ (legacy_tab_audio.cpp L388–389) only has `ImGui::TextUnformatted("Regex Enabled")` with no tooltip and no `ImGui::SameLine()`. All three sibling legacy tabs (files L187–192, fonts L215–220, data L285–290) correctly include both `ImGui::SetTooltip` on hover and `ImGui::SameLine()`. Fix: add `if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.regexTooltip.c_str()); ImGui::SameLine();` after the TextUnformatted call.
 
 - [ ] 51. [legacy_tab_audio.cpp] `format_time()` uses truncation instead of JS `Math.round` for seconds
