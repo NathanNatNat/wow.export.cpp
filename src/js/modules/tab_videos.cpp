@@ -1046,10 +1046,12 @@ void mounted() {
 	prev_video_player_show_subtitles = view.config.value("videoPlayerShowSubtitles", true);
 	const bool sort_by_id = view.config.value("listfileSortByID", false);
 
-	std::thread([sort_by_id]() {
-		core::showLoadingScreen(1);
-		core::progressLoadingScreen("Loading video metadata...");
+	view.isLoading = true;
+	view.loadPct = 0;
+	view.loadingProgress = "Loading video metadata...";
+	view.isBusy++;
 
+	std::thread([sort_by_id]() {
 		auto entries = build_video_entries(sort_by_id);
 
 		core::postToMainThread([entries = std::move(entries)]() mutable {
@@ -1057,9 +1059,11 @@ void mounted() {
 			core::view->listfileVideos.reserve(entries.size());
 			for (auto& e : entries)
 				core::view->listfileVideos.push_back(std::move(e));
-		});
 
-		core::hideLoadingScreen();
+			core::view->loadPct = -1;
+			core::view->isLoading = false;
+			core::view->isBusy--;
+		});
 	}).detach();
 }
 
