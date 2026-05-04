@@ -19,6 +19,7 @@ namespace config {
 static bool isSaving = false;
 static bool isQueued = false;
 static nlohmann::json defaultConfig = nlohmann::json::object();
+static nlohmann::json lastSavedSnapshot = nlohmann::json::object();
 
 /**
  * Clone one config object into another.
@@ -60,6 +61,8 @@ static void doSave() {
 		file.close();
 	}
 
+	lastSavedSnapshot = core::view->config;
+
 	// If another save was attempted during this one, re-save.
 	if (isQueued) {
 		isQueued = false;
@@ -99,6 +102,7 @@ void load() {
 	copyConfig(userConfig, mergedConfig);
 
 	core::view->config = mergedConfig;
+	lastSavedSnapshot = mergedConfig;
 }
 
 /**
@@ -131,6 +135,14 @@ void save() {
 		// Queue another save.
 		isQueued = true;
 	}
+}
+
+void checkForChanges() {
+	if (!core::view)
+		return;
+
+	if (core::view->config != lastSavedSnapshot)
+		save();
 }
 
 } // namespace config

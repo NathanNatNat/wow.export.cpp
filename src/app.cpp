@@ -1884,6 +1884,8 @@ static void checkWatchers(GLFWwindow* window) {
 	if (!core::view)
 		return;
 
+	config::checkForChanges();
+
 	/**
 	 * Invoked when the active loading percentage is changed.
 	 * @param {float} val

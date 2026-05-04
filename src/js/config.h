@@ -37,4 +37,10 @@ void resetAllToDefault();
  */
 void save();
 
+/**
+ * Check if config has changed since last save and trigger a save if so.
+ * Called each frame from the main loop, equivalent to JS core.view.$watch('config', ..., { deep: true }).
+ */
+void checkForChanges();
+
 } // namespace config
