@@ -1233,6 +1233,7 @@ void render() {
 		if (is_streaming || view.videoPlayerState) {
 			if (!current_video_url.empty() && mpv_render_ctx) {
 				ImVec2 avail = ImGui::GetContentRegionAvail();
+				if (avail.x < 1.0f || avail.y < 1.0f) avail = ImVec2(1, 1);
 				ImVec2 container_pos = ImGui::GetCursorScreenPos();
 
 				int64_t vid_w = 0, vid_h = 0;
@@ -1242,10 +1243,9 @@ void render() {
 
 				float scale = std::min(avail.x / static_cast<float>(vid_w),
 				                       avail.y / static_cast<float>(vid_h));
-				int render_w = static_cast<int>(vid_w * scale);
-				int render_h = static_cast<int>(vid_h * scale);
-				if (render_w < 1) render_w = 1;
-				if (render_h < 1) render_h = 1;
+				if (scale <= 0.0f) scale = 1.0f;
+				int render_w = std::max(1, static_cast<int>(vid_w * scale));
+				int render_h = std::max(1, static_cast<int>(vid_h * scale));
 
 				float offset_x = (avail.x - render_w) * 0.5f;
 				float offset_y = (avail.y - render_h) * 0.5f;
@@ -1278,20 +1278,17 @@ void render() {
 					mpv_render_context_render(mpv_render_ctx, render_params);
 				}
 
-				ImDrawList* bg_dl = ImGui::GetWindowDrawList();
-				bg_dl->AddRectFilled(container_pos,
+				ImDrawList* dl = ImGui::GetWindowDrawList();
+				dl->AddRectFilled(container_pos,
 					ImVec2(container_pos.x + avail.x, container_pos.y + avail.y),
 					IM_COL32(0, 0, 0, 255));
 
 				ImVec2 img_pos(container_pos.x + offset_x, container_pos.y + offset_y);
-				ImGui::SetCursorScreenPos(img_pos);
+				ImVec2 img_max(img_pos.x + render_w, img_pos.y + render_h);
+				dl->AddImage(static_cast<ImTextureID>(static_cast<uintptr_t>(mpv_texture)),
+					img_pos, img_max, ImVec2(0, 1), ImVec2(1, 0));
 
-				ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(mpv_texture)),
-					ImVec2(static_cast<float>(render_w), static_cast<float>(render_h)),
-					ImVec2(0, 1), ImVec2(1, 0));
-
-				bool video_hovered = ImGui::IsItemHovered();
-				if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+				if (ImGui::IsMouseHoveringRect(img_pos, img_max) && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 					int paused_click = 0;
 					mpv_get_property(mpv_ctx, "pause", MPV_FORMAT_FLAG, &paused_click);
 					int toggle = !paused_click;
@@ -1306,23 +1303,25 @@ void render() {
 				mpv_get_property(mpv_ctx, "pause", MPV_FORMAT_FLAG, &paused);
 				mpv_get_property(mpv_ctx, "volume", MPV_FORMAT_DOUBLE, &volume);
 
-				const float bar_height = 36.0f;
-				const float bar_pad = 8.0f;
-				ImVec2 bar_min(img_pos.x, img_pos.y + render_h - bar_height);
-				ImVec2 bar_max(img_pos.x + render_w, img_pos.y + render_h);
-
-				ImDrawList* dl = ImGui::GetWindowDrawList();
+				const float bar_h = 32.0f;
+				const float pad = 6.0f;
+				ImVec2 bar_min(img_pos.x, img_max.y - bar_h);
+				ImVec2 bar_max = img_max;
 				dl->AddRectFilled(bar_min, bar_max, IM_COL32(0, 0, 0, 180));
 
-				float cx = bar_min.x + bar_pad;
-				float cy = bar_min.y + (bar_height - ImGui::GetTextLineHeight()) * 0.5f;
+				float text_y = bar_min.y + (bar_h - ImGui::GetTextLineHeight()) * 0.5f;
+				float cx = bar_min.x + pad;
 
-				ImGui::SetCursorScreenPos(ImVec2(cx, cy));
-				if (ImGui::SmallButton(paused ? "\xe2\x96\xb6" : "\xe2\x8f\xb8")) {
+				const char* play_icon = paused ? "\xe2\x96\xb6" : "\xe2\x8f\xb8";
+				dl->AddText(ImVec2(cx, text_y), IM_COL32(255, 255, 255, 255), play_icon);
+				ImVec2 play_size = ImGui::CalcTextSize(play_icon);
+				ImVec2 play_min(cx, bar_min.y);
+				ImVec2 play_max(cx + play_size.x + pad, bar_max.y);
+				if (ImGui::IsMouseHoveringRect(play_min, play_max) && ImGui::IsMouseClicked(0)) {
 					int toggle = !paused;
 					mpv_set_property(mpv_ctx, "pause", MPV_FORMAT_FLAG, &toggle);
 				}
-				cx += ImGui::GetItemRectSize().x + bar_pad;
+				cx += play_size.x + pad * 2;
 
 				int cur_min = static_cast<int>(time_pos) / 60;
 				int cur_sec = static_cast<int>(time_pos) % 60;
@@ -1330,55 +1329,30 @@ void render() {
 				int dur_sec = static_cast<int>(duration) % 60;
 				char time_buf[32];
 				std::snprintf(time_buf, sizeof(time_buf), "%d:%02d / %d:%02d", cur_min, cur_sec, dur_min, dur_sec);
-				ImVec2 time_size = ImGui::CalcTextSize(time_buf);
+				dl->AddText(ImVec2(cx, text_y), IM_COL32(255, 255, 255, 255), time_buf);
+				cx += ImGui::CalcTextSize(time_buf).x + pad * 2;
 
-				ImGui::SetCursorScreenPos(ImVec2(cx, cy));
-				ImGui::TextUnformatted(time_buf);
-				cx += time_size.x + bar_pad;
+				float seek_end = bar_max.x - pad - 50.0f;
+				float seek_w = seek_end - cx;
+				if (seek_w > 20.0f && duration > 0.0) {
+					float fill = static_cast<float>(time_pos / duration);
+					float seek_y = bar_min.y + bar_h * 0.5f;
+					dl->AddLine(ImVec2(cx, seek_y), ImVec2(cx + seek_w, seek_y), IM_COL32(100, 100, 100, 200), 3.0f);
+					dl->AddLine(ImVec2(cx, seek_y), ImVec2(cx + seek_w * fill, seek_y), IM_COL32(255, 255, 255, 255), 3.0f);
+					dl->AddCircleFilled(ImVec2(cx + seek_w * fill, seek_y), 6.0f, IM_COL32(255, 255, 255, 255));
 
-				float right_controls_width = 80.0f;
-				float seek_width = (bar_max.x - bar_pad) - cx - right_controls_width;
-				if (seek_width < 40.0f) seek_width = 40.0f;
-
-				ImGui::SetCursorScreenPos(ImVec2(cx, bar_min.y + (bar_height - ImGui::GetFrameHeight()) * 0.5f));
-				ImGui::SetNextItemWidth(seek_width);
-				float seek_pos = (duration > 0) ? static_cast<float>(time_pos / duration) : 0.0f;
-				if (ImGui::SliderFloat("##seek", &seek_pos, 0.0f, 1.0f, "")) {
-					double new_pos = seek_pos * duration;
-					mpv_set_property(mpv_ctx, "time-pos", MPV_FORMAT_DOUBLE, &new_pos);
-				}
-				cx += seek_width + bar_pad;
-
-				ImGui::SetCursorScreenPos(ImVec2(cx, cy));
-				float vol = static_cast<float>(volume);
-				ImGui::SetNextItemWidth(40.0f);
-				if (ImGui::SliderFloat("##vol", &vol, 0.0f, 100.0f, "")) {
-					double new_vol = static_cast<double>(vol);
-					mpv_set_property(mpv_ctx, "volume", MPV_FORMAT_DOUBLE, &new_vol);
-				}
-				if (ImGui::IsItemHovered())
-					ImGui::SetTooltip("Volume: %.0f%%", vol);
-				cx += 40.0f + bar_pad;
-
-				ImGui::SetCursorScreenPos(ImVec2(cx, cy));
-				if (ImGui::SmallButton("\xe2\x9b\xb6")) {
-					GLFWwindow* win = glfwGetCurrentContext();
-					if (win) {
-						GLFWmonitor* monitor = glfwGetWindowMonitor(win);
-						if (monitor) {
-							glfwSetWindowMonitor(win, nullptr, 100, 100, 1280, 720, 0);
-						} else {
-							monitor = glfwGetPrimaryMonitor();
-							const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-							glfwSetWindowMonitor(win, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
-						}
+					ImVec2 seek_min(cx, bar_min.y);
+					ImVec2 seek_max(cx + seek_w, bar_max.y);
+					if (ImGui::IsMouseHoveringRect(seek_min, seek_max) && ImGui::IsMouseDown(0)) {
+						float mouse_x = ImGui::GetMousePos().x;
+						double new_pos = static_cast<double>((mouse_x - cx) / seek_w) * duration;
+						if (new_pos < 0.0) new_pos = 0.0;
+						if (new_pos > duration) new_pos = duration;
+						mpv_set_property(mpv_ctx, "time-pos", MPV_FORMAT_DOUBLE, &new_pos);
 					}
 				}
-				if (ImGui::IsItemHovered())
-					ImGui::SetTooltip("Toggle Fullscreen");
 
-				ImGui::SetCursorScreenPos(ImVec2(container_pos.x, container_pos.y + avail.y));
-
+				ImGui::Dummy(avail);
 			} else if (poll_active) {
 				ImGui::TextUnformatted("Video is being processed, please wait...");
 			} else {
