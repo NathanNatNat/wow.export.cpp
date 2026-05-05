@@ -200,18 +200,6 @@ static void destroyAppShellTextures() {
 	if (s_gearTexture) { glDeleteTextures(1, &s_gearTexture); s_gearTexture = 0; }
 }
 
-static std::unordered_map<std::string, GLuint> s_navIconTextures;
-
-static GLuint getNavIconTexture(const std::string& icon_filename) {
-	auto it = s_navIconTextures.find(icon_filename);
-	if (it != s_navIconTextures.end())
-		return it->second;
-
-	std::filesystem::path path = constants::SRC_DIR() / "fa-icons" / icon_filename;
-	GLuint tex = loadSvgTexture(path, 44);
-	s_navIconTextures[icon_filename] = tex;
-	return tex;
-}
 
 static void crash(const std::string& errorCode, const std::string& errorText);
 
@@ -348,11 +336,8 @@ static void renderCrashScreen() {
 	ImGui::End();
 }
 
-static constexpr float HEADER_HEIGHT = 53.0f;
 static constexpr float FOOTER_HEIGHT = 73.0f;
 static constexpr float TOAST_HEIGHT   = 30.0f;
-static constexpr float NAV_ICON_WIDTH = 45.0f;
-static constexpr float NAV_ICON_HEIGHT = 52.0f;
 
 
 static void handleToastOptionClick(const std::function<void()>& func) {
@@ -429,180 +414,6 @@ static void renderAppShell() {
 	const ImVec2 vp_size = viewport->WorkSize;
 
 	{
-		ImGui::SetNextWindowPos(vp_pos);
-		ImGui::SetNextWindowSize(ImVec2(vp_size.x, HEADER_HEIGHT));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-		ImGui::Begin("##AppHeader", nullptr,
-			ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
-			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
-			ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing);
-
-		ImDrawList* draw = ImGui::GetWindowDrawList();
-		draw->AddLine(
-			ImVec2(vp_pos.x, vp_pos.y + HEADER_HEIGHT - 1.0f),
-			ImVec2(vp_pos.x + vp_size.x, vp_pos.y + HEADER_HEIGHT - 1.0f),
-			ImGui::ColorConvertFloat4ToU32(ImGui::GetStyleColorVec4(ImGuiCol_Separator)), 1.0f);
-
-		if (core::view && core::view->toast.has_value()) {
-			ImDrawList* fg = ImGui::GetForegroundDrawList();
-			const float shadow_y = vp_pos.y + HEADER_HEIGHT;
-			const float x0 = vp_pos.x, x1 = vp_pos.x + vp_size.x;
-			static constexpr ImU32 shadow_alphas[] = { 80, 55, 35, 18, 7 };
-			for (int i = 0; i < 5; ++i) {
-				fg->AddRectFilled(
-					ImVec2(x0, shadow_y + i),
-					ImVec2(x1, shadow_y + i + 1.0f),
-					IM_COL32(0, 0, 0, shadow_alphas[i]));
-			}
-		}
-
-		float cursor_x = 15.0f;
-		ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - 32.0f) * 0.5f));
-		if (s_logoTexture) {
-			ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(s_logoTexture)),
-				ImVec2(32.0f, 32.0f));
-			if (ImGui::IsItemClicked()) {
-				if (core::view) {
-					if (core::view->installType == static_cast<int>(install_type::MPQ))
-						modules::setActive("legacy_tab_home");
-					else
-						modules::setActive("tab_home");
-				}
-			}
-			cursor_x += 32.0f + 8.0f;
-		}
-
-		ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - 25.0f) * 0.5f));
-		{
-			ImFont* bold = app::theme::getBoldFont();
-			ImGui::PushFont(bold, 25.0f);
-			ImGui::TextUnformatted("wow.export.cpp");
-			if (ImGui::IsItemClicked()) {
-				if (core::view) {
-					if (core::view->installType == static_cast<int>(install_type::MPQ))
-						modules::setActive("legacy_tab_home");
-					else
-						modules::setActive("tab_home");
-				}
-			}
-			ImGui::PopFont();
-		}
-		cursor_x = ImGui::GetItemRectMax().x - vp_pos.x + 10.0f;
-
-		if (core::view && !core::view->isLoading) {
-			const auto& navButtons = modules::getNavButtons();
-			for (const auto& btn : navButtons) {
-				if (!(btn.installTypes & static_cast<uint32_t>(core::view->installType)))
-					continue;
-
-				const bool is_active = core::view->activeModule.is_object() &&
-					core::view->activeModule.contains("__name") &&
-					core::view->activeModule["__name"].get<std::string>() == btn.module;
-
-				ImGui::PushID(btn.module.c_str());
-				ImGui::SetCursorPos(ImVec2(cursor_x, (HEADER_HEIGHT - NAV_ICON_HEIGHT) * 0.5f));
-
-				if (is_active)
-					ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-
-				bool clicked = false;
-				const char* icon_glyph = app::theme::getIconForFilename(btn.icon);
-				if (icon_glyph) {
-					ImGui::PushFont(app::theme::getIconFont());
-					clicked = ImGui::Button(icon_glyph, ImVec2(NAV_ICON_WIDTH, NAV_ICON_HEIGHT));
-					ImGui::PopFont();
-				} else {
-					GLuint icon_tex = getNavIconTexture(btn.icon);
-					if (icon_tex) {
-						ImVec4 tint = is_active ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f) : ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
-						clicked = ImGui::ImageButton("##nav",
-							static_cast<ImTextureID>(static_cast<uintptr_t>(icon_tex)),
-							ImVec2(NAV_ICON_WIDTH - 8.0f, NAV_ICON_HEIGHT - 16.0f),
-							ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), tint);
-					}
-				}
-
-				if (is_active)
-					ImGui::PopStyleColor();
-
-				if (clicked)
-					modules::setActive(btn.module);
-
-				if (ImGui::IsItemHovered())
-					ImGui::SetTooltip("%s", btn.label.c_str());
-
-				ImGui::PopID();
-				cursor_x += NAV_ICON_WIDTH;
-			}
-
-			float right_x = vp_size.x;
-
-			if (!core::view->isBusy) {
-				right_x -= 15.0f + 20.0f;
-				ImGui::SetCursorPos(ImVec2(right_x, (HEADER_HEIGHT - 20.0f) * 0.5f));
-				ImGui::PushID("##nav-extra");
-
-				GLuint hamburger_tex = getNavIconTexture("line-columns.svg");
-				bool hamburger_clicked = false;
-				if (hamburger_tex) {
-					hamburger_clicked = ImGui::ImageButton("##hamburger",
-						static_cast<ImTextureID>(static_cast<uintptr_t>(hamburger_tex)),
-						ImVec2(18.0f, 18.0f));
-				} else {
-					ImGui::PushFont(app::theme::getIconFont());
-					hamburger_clicked = ImGui::Button(ICON_FA_BARS, ImVec2(20.0f, 20.0f));
-					ImGui::PopFont();
-				}
-
-				if (hamburger_clicked)
-					ImGui::OpenPopup("##MenuExtraPopup");
-
-				ImGui::SetNextWindowPos(ImVec2(vp_pos.x + right_x + 20.0f, vp_pos.y + HEADER_HEIGHT), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-				if (ImGui::BeginPopup("##MenuExtraPopup", ImGuiWindowFlags_AlwaysAutoResize)) {
-					const auto& contextOpts = modules::getContextMenuOptions();
-					for (const auto& opt : contextOpts) {
-						if (opt.dev_only && !(core::view->isDev))
-							continue;
-						if (ImGui::MenuItem(opt.label.c_str())) {
-							if (opt.handler)
-								opt.handler();
-							else
-								modules::setActive(opt.id);
-						}
-					}
-					ImGui::EndPopup();
-				}
-				ImGui::PopID();
-
-				right_x -= 10.0f + 20.0f;
-				ImGui::SetCursorPos(ImVec2(right_x, (HEADER_HEIGHT - 20.0f) * 0.5f));
-				ImGui::PushID("##nav-help");
-
-				GLuint help_tex = getNavIconTexture("help.svg");
-				if (help_tex) {
-					ImGui::ImageButton("##help",
-						static_cast<ImTextureID>(static_cast<uintptr_t>(help_tex)),
-						ImVec2(18.0f, 18.0f));
-				} else {
-					ImGui::PushFont(app::theme::getIconFont());
-					ImGui::Button(ICON_FA_CIRCLE_QUESTION, ImVec2(20.0f, 20.0f));
-					ImGui::PopFont();
-				}
-
-				if (ImGui::IsItemHovered())
-					ImGui::SetTooltip("Help");
-
-				ImGui::PopID();
-			}
-		}
-
-		ImGui::End();
-		ImGui::PopStyleVar(2);
-	}
-
-	{
 		float footer_y = vp_pos.y + vp_size.y - FOOTER_HEIGHT;
 		ImGui::SetNextWindowPos(ImVec2(vp_pos.x, footer_y));
 		ImGui::SetNextWindowSize(ImVec2(vp_size.x, FOOTER_HEIGHT));
@@ -634,19 +445,94 @@ static void renderAppShell() {
 	}
 
 	{
-		float content_y = vp_pos.y + HEADER_HEIGHT;
-		float content_h = vp_size.y - HEADER_HEIGHT - FOOTER_HEIGHT;
+		float content_y = vp_pos.y;
+		float content_h = vp_size.y - FOOTER_HEIGHT;
 		if (content_h < 0) content_h = 0;
 
 		ImGui::SetNextWindowPos(ImVec2(vp_pos.x, content_y));
 		ImGui::SetNextWindowSize(ImVec2(vp_size.x, content_h));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 2));
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		ImGui::Begin("##AppContent", nullptr,
 			ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
 			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
 			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
 			ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoFocusOnAppearing);
+
+		if (core::view && !core::view->isLoading) {
+			if (core::view->installType != 0) {
+				const std::string active_name = (core::view->activeModule.is_object() &&
+					core::view->activeModule.contains("__name"))
+					? core::view->activeModule["__name"].get<std::string>() : std::string{};
+
+				const std::string home_module = (core::view->installType == static_cast<int>(install_type::MPQ))
+					? "legacy_tab_home" : "tab_home";
+
+				std::string selected_module;
+				static std::string s_imguiSelection;
+				float tab_bar_y = ImGui::GetCursorPosY();
+
+				if (ImGui::BeginTabBar("##NavTabBar")) {
+					if (ImGui::BeginTabItem("Home")) {
+						selected_module = home_module;
+						ImGui::EndTabItem();
+					}
+
+					const auto& navButtons = modules::getNavButtons();
+					for (const auto& btn : navButtons) {
+						if (!(btn.installTypes & static_cast<uint32_t>(core::view->installType)))
+							continue;
+						if (ImGui::BeginTabItem(btn.label.c_str())) {
+							selected_module = btn.module;
+							ImGui::EndTabItem();
+						}
+					}
+
+					ImGui::EndTabBar();
+				}
+
+				if (!selected_module.empty() && selected_module != s_imguiSelection) {
+					s_imguiSelection = selected_module;
+					if (selected_module != active_name)
+						modules::setActive(selected_module);
+				}
+
+				if (!core::view->isBusy) {
+					float gear_size = ImGui::GetFrameHeight();
+					ImGui::SetCursorPos(ImVec2(vp_size.x - gear_size - ImGui::GetStyle().FramePadding.x, tab_bar_y));
+					if (ImGui::Button(ICON_FA_GEAR, ImVec2(gear_size, gear_size)))
+						ImGui::OpenPopup("##MenuExtraPopup");
+				}
+
+				if (ImGui::BeginPopup("##MenuExtraPopup", ImGuiWindowFlags_AlwaysAutoResize)) {
+					const auto& contextOpts = modules::getContextMenuOptions();
+					for (const auto& opt : contextOpts) {
+						if (opt.dev_only && !(core::view->isDev))
+							continue;
+						if (ImGui::MenuItem(opt.label.c_str())) {
+							if (opt.handler)
+								opt.handler();
+								else
+								modules::setActive(opt.id);
+						}
+					}
+					ImGui::EndPopup();
+				}
+			}
+
+			if (core::view->toast.has_value()) {
+				ImDrawList* fg = ImGui::GetForegroundDrawList();
+				const float shadow_y = ImGui::GetCursorScreenPos().y;
+				const float x0 = vp_pos.x, x1 = vp_pos.x + vp_size.x;
+				static constexpr ImU32 shadow_alphas[] = { 80, 55, 35, 18, 7 };
+				for (int i = 0; i < 5; ++i) {
+					fg->AddRectFilled(
+						ImVec2(x0, shadow_y + i),
+						ImVec2(x1, shadow_y + i + 1.0f),
+						IM_COL32(0, 0, 0, shadow_alphas[i]));
+				}
+			}
+		}
 
 		if (s_logoTexture) {
 			float logo_w = static_cast<float>(s_logoWidth);
@@ -2332,10 +2218,6 @@ int main(int argc, char* argv[]) {
 
 
 	destroyAppShellTextures();
-	for (auto& [name, tex] : s_navIconTextures) {
-		if (tex) glDeleteTextures(1, &tex);
-	}
-	s_navIconTextures.clear();
 
 #ifdef _WIN32
 	{

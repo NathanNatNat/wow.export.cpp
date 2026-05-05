@@ -73,6 +73,11 @@ These files, features, and options have been deliberately removed from the C++ p
 - **Reason**: Per project guidelines, user-facing text says "wow.export.cpp".
 - **Impact**: Intentional branding change.
 
+### [app.cpp] Custom header bar replaced with ImGui tab bar
+- **JS Source**: `src/index.html` lines 11–24 (`#header` div with logo, nav icons, help button, hamburger menu)
+- **Reason**: Deliberately excluded — the icon-based header bar is replaced with native ImGui tabs for cleaner integration and better usability. The logo, "wow.export.cpp" title text, and help button are removed from the navigation area.
+- **Impact**: Navigation uses text-label tabs (with a Home tab) instead of icon buttons. Tab bar only visible after a data source is connected. Logo watermark still visible in the content area and crash screen. Help button removed (tab_help was already removed). Context menu accessible via a gear icon button at the top right.
+
 ---
 
 ## C++ Language / Architecture Limitations
