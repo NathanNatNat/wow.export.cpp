@@ -157,11 +157,18 @@ The following files have been deliberately removed from the C++ build. Do **not*
 - **`src/js/updater.cpp`** / **`updater.h`**
 - **`src/js/modules/module_test_a.cpp`** / **`module_test_a.h`**
 - **`src/js/modules/module_test_b.cpp`** / **`module_test_b.h`**
+- **`src/js/modules/tab_videos.cpp`** / **`tab_videos.h`**
+- **`src/js/subtitles.cpp`** / **`subtitles.h`**
+- **`extern/libmpv-prebuilt/`** (entire directory)
+- **`extern/ffmpeg-prebuilt/`** (entire directory)
+- **`scripts/setup-libmpv.ps1`**
+- **`scripts/setup-ffmpeg.ps1`**
 
 ### Removed Features
 The following features have been deliberately removed. Do **not** re-add unless explicitly asked. Do **not** add TODO entries for them. See the "Intentionally Removed" section in [`DEVIATIONS.md`](DEVIATIONS.md) for details.
 - **"Reload Styling" context menu option**
 - **Auto-updater** (check for updates, download, and launch updater helper)
+- **Videos tab** (video playback, Kino streaming, subtitle export, and all related dependencies)
 
 ### General Conversion Fidelity
 - Conversions must be fully comprehensive — every function, method, constant, code path, and UI element from the JS source must be ported.

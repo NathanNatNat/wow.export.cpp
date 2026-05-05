@@ -171,11 +171,6 @@ namespace TIME {
 	inline constexpr int DAY = 86400000; // Milliseconds in a day.
 }
 
-namespace KINO {
-	inline constexpr std::string_view API_URL = "https://www.kruithne.net/wow.export/v2/get_video";
-	inline constexpr int POLL_INTERVAL = 20000;
-}
-
 namespace MAGIC {
 	inline constexpr uint32_t M3DT = 0x5444334D; // M3 model magic.
 	inline constexpr uint32_t MD21 = 0x3132444D; // M2 model magic.
@@ -190,7 +185,7 @@ struct FileIdentifier {
 
 extern const std::array<FileIdentifier, 17> FILE_IDENTIFIERS;
 
-inline constexpr std::array<std::string_view, 20> NAV_BUTTON_ORDER = {{
+inline constexpr std::array<std::string_view, 19> NAV_BUTTON_ORDER = {{
 	"tab_models",
 	"tab_textures",
 	"tab_characters",
@@ -199,7 +194,6 @@ inline constexpr std::array<std::string_view, 20> NAV_BUTTON_ORDER = {{
 	"tab_decor",
 	"tab_creatures",
 	"tab_audio",
-	"tab_videos",
 	"tab_maps",
 	"tab_zones",
 	"tab_text",

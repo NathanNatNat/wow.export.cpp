@@ -18,10 +18,11 @@ Each entry includes the C++ file, the JS source reference, a description of the 
 
 These files, features, and options have been deliberately removed from the C++ port with no equivalent.
 
-### [tab_videos.cpp] Video player fullscreen button removed
-- **JS Source**: `src/js/modules/tab_videos.js` line 493 (`<video>` element `controls` attribute provides native fullscreen)
-- **Reason**: Deliberately excluded — not wanted in the C++ port.
-- **Impact**: Video player has no fullscreen toggle.
+### tab_videos module, subtitles module, libmpv, and FFmpeg dependencies
+- **JS Source**: `src/js/modules/tab_videos.js`, `src/js/subtitles.js`
+- **Reason**: Deliberately excluded — video tab and all associated dependencies (libmpv, FFmpeg prebuilt, Kino server integration, subtitle handling) not wanted in the C++ port.
+- **Impact**: Videos tab is absent from the C++ app. No video playback, streaming, or subtitle export functionality.
+- **Files removed**: `tab_videos.cpp`, `tab_videos.h`, `subtitles.cpp`, `subtitles.h`, `extern/libmpv-prebuilt/`, `extern/ffmpeg-prebuilt/`, `scripts/setup-libmpv.ps1`, `scripts/setup-ffmpeg.ps1`
 
 ### "Reload Styling" context menu option
 - **JS Source**: `src/app.js` lines 160-164, registered at line 550
@@ -89,11 +90,6 @@ These files, features, and options have been deliberately removed from the C++ p
 
 These deviations exist because a direct port is not possible due to fundamental differences between JavaScript and C++.
 
-
-### [tab_videos.cpp] Video playback uses libmpv instead of HTML5 `<video>` element
-- **JS Source**: `src/js/modules/tab_videos.js` lines 219–276
-- **Reason**: JS uses an HTML5 `<video>` element with native browser controls (play/pause, seeking, volume). C++ uses libmpv rendering to an OpenGL FBO displayed via `ImGui::Image()`. Provides inline video with audio and subtitles, but without the browser's built-in seek bar and volume controls.
-- **Impact**: Video plays inline with audio and subtitle support. Playback end/error events are handled via mpv event polling. No seek bar or volume controls yet (mpv handles audio output directly via WASAPI/PulseAudio).
 
 ### [core.cpp] `progressLoadingScreen()` does not await redraw
 - **JS Source**: `src/js/core.js` lines 442–450

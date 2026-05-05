@@ -145,13 +145,6 @@ $RECYCLE.BIN/
 !extern/openssl-prebuilt/lib/**
 
 # =====================
-# FFmpeg prebuilt (downloaded by scripts/setup-ffmpeg.ps1 — NOT tracked)
-# =====================
-extern/ffmpeg-prebuilt/bin/
-extern/ffmpeg-prebuilt/include/
-extern/ffmpeg-prebuilt/lib/
-
-# =====================
 # Linux
 # =====================
 *~

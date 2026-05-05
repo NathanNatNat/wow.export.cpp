@@ -190,7 +190,6 @@ struct AppState {
 	std::vector<nlohmann::json> selectionTextures;
 	std::vector<nlohmann::json> selectionModels;
 	std::vector<nlohmann::json> selectionSounds;
-	std::vector<nlohmann::json> selectionVideos;
 	std::vector<nlohmann::json> selectionText;
 	std::vector<nlohmann::json> selectionFonts;
 	std::vector<nlohmann::json> selectionMaps;
@@ -211,7 +210,6 @@ struct AppState {
 	std::string userInputFilterInstallStrings;
 	std::vector<nlohmann::json> listfileTextures;
 	std::vector<nlohmann::json> listfileSounds;
-	std::vector<nlohmann::json> listfileVideos;
 	std::vector<nlohmann::json> listfileText;
 	std::vector<nlohmann::json> listfileFonts;
 	std::vector<nlohmann::json> listfileModels;
@@ -240,7 +238,6 @@ struct AppState {
 	bool soundPlayerState = false;
 	std::string soundPlayerTitle = "No File Selected";
 	double soundPlayerDuration = 0;
-	bool videoPlayerState = false;
 	nlohmann::json modelViewerContext;
 	std::string modelViewerActiveType = "none";
 	std::vector<nlohmann::json> modelViewerGeosets;
@@ -424,7 +421,6 @@ struct AppState {
 	std::vector<MenuOption> menuButtonDecor;
 	std::vector<MenuOption> menuButtonCreatures;
 	std::vector<MenuOption> menuButtonCharacterExport;
-	std::vector<MenuOption> menuButtonVideos;
 	std::vector<MenuOption> menuButtonData;
 	std::vector<nlohmann::json> helpArticles;
 	std::vector<nlohmann::json> helpFilteredArticles;

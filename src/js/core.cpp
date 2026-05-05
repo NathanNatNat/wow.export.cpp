@@ -267,13 +267,6 @@ AppState makeNewView() {
 		{ "Copy to Clipboard (3D Preview)", "CLIPBOARD" }
 	};
 
-	state.menuButtonVideos = {
-		{ "Export MP4 (Video + Audio)", "MP4" },
-		{ "Export AVI (Video Only)", "AVI" },
-		{ "Export MP3 (Audio Only)", "MP3" },
-		{ "Export Subtitles", "SUBTITLES" }
-	};
-
 	state.menuButtonData = {
 		{ "Export as CSV", "CSV" },
 		{ "Export as SQL", "SQL" },

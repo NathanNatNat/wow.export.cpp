@@ -23,7 +23,6 @@
 #include "modules/tab_install.h"
 #include "modules/tab_text.h"
 #include "modules/tab_fonts.h"
-#include "modules/tab_videos.h"
 #include "modules/tab_models.h"
 #include "modules/tab_creatures.h"
 #include "modules/tab_decor.h"
@@ -351,11 +350,6 @@ void initialize() {
 		[]() { tab_fonts::render(); },
 		[]() { tab_fonts::mounted(); },
 		[]() { tab_fonts::registerTab(); });
-
-	add_module("tab_videos",
-		[]() { tab_videos::render(); },
-		[]() { tab_videos::mounted(); },
-		[]() { tab_videos::registerTab(); });
 
 	add_module("tab_models",
 		[]() { tab_models::render(); },

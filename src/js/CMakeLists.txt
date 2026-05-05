@@ -8,7 +8,6 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/MultiMap.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/crc32.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/xml.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/subtitles.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wmv.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/blob.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/hashing/xxhash64.cpp
@@ -174,7 +173,6 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_data.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_textures.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_zones.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_videos.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_items.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_item_sets.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_creatures.cpp

@@ -332,19 +332,6 @@ add_subdirectory(extern/minizip-ng EXCLUDE_FROM_ALL)
 add_library(portable_file_dialogs INTERFACE)
 target_include_directories(portable_file_dialogs INTERFACE extern/portable-file-dialogs)
 
-# ── libmpv (video playback) ──────────────────────────────────────
-if(WIN32)
-    add_subdirectory(extern/libmpv-prebuilt EXCLUDE_FROM_ALL)
-else()
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(MPV REQUIRED mpv)
-    add_library(libmpv::libmpv INTERFACE IMPORTED GLOBAL)
-    set_target_properties(libmpv::libmpv PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${MPV_INCLUDE_DIRS}"
-        INTERFACE_LINK_LIBRARIES      "${MPV_LIBRARIES}"
-    )
-endif()
-
 # ════════════════════════════════════════════════════════════════
 #  Main executable
 # ════════════════════════════════════════════════════════════════
@@ -382,8 +369,6 @@ target_link_libraries(wow_export_cpp PRIVATE
     portable_file_dialogs
     # Logging (bundles fmt)
     spdlog::spdlog
-    # Video playback
-    libmpv::libmpv
 )
 
 # Platform-specific link dependencies
@@ -401,25 +386,6 @@ if(WIN32)
         COMMENT "Copying OpenSSL DLLs to output directory"
     )
 
-    # Copy libmpv DLL next to the exe at build time
-    foreach(_dll ${LIBMPV_RUNTIME_DLLS})
-        add_custom_command(TARGET wow_export_cpp POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${_dll}"
-                "$<TARGET_FILE_DIR:wow_export_cpp>"
-            COMMENT "Copying libmpv DLL: ${_dll}"
-        )
-    endforeach()
-
-    # Copy FFmpeg DLLs next to the exe at build time
-    foreach(_dll ${FFMPEG_RUNTIME_DLLS})
-        add_custom_command(TARGET wow_export_cpp POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${_dll}"
-                "$<TARGET_FILE_DIR:wow_export_cpp>"
-            COMMENT "Copying FFmpeg DLL: ${_dll}"
-        )
-    endforeach()
 elseif(UNIX)
     find_package(Threads REQUIRED)
     target_link_libraries(wow_export_cpp PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
