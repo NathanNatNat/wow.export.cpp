@@ -155,6 +155,8 @@ The following files have been deliberately removed from the C++ build. Do **not*
 - **`src/js/components/markdown-content.cpp`** / **`markdown-content.h`**
 - **`src/js/components/home-showcase.cpp`** / **`home-showcase.h`**
 - **`src/js/updater.cpp`** / **`updater.h`**
+- **`src/js/modules/module_test_a.cpp`** / **`module_test_a.h`**
+- **`src/js/modules/module_test_b.cpp`** / **`module_test_b.h`**
 
 ### Removed Features
 The following features have been deliberately removed. Do **not** re-add unless explicitly asked. Do **not** add TODO entries for them. See the "Intentionally Removed" section in [`DEVIATIONS.md`](DEVIATIONS.md) for details.

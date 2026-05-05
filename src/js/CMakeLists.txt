@@ -183,8 +183,6 @@ target_sources(wow_export_cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_models.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_models_legacy.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_characters.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/module_test_a.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/modules/module_test_b.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/tab_blender.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/legacy_tab_textures.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/modules/screen_settings.cpp

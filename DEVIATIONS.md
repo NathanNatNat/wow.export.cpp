@@ -73,6 +73,11 @@ These files, features, and options have been deliberately removed from the C++ p
 - **Reason**: Per project guidelines, user-facing text says "wow.export.cpp".
 - **Impact**: Intentional branding change.
 
+### module_test_a and module_test_b removed
+- **JS Source**: `src/js/modules/module_test_a.js`, `src/js/modules/module_test_b.js`
+- **Reason**: Deliberately excluded — development/debugging test modules with no user-facing functionality.
+- **Impact**: No test module tabs available. No user-facing functionality loss.
+
 ### [app.cpp] Custom header bar replaced with ImGui tab bar
 - **JS Source**: `src/index.html` lines 11–24 (`#header` div with logo, nav icons, help button, hamburger menu)
 - **Reason**: Deliberately excluded — the icon-based header bar is replaced with native ImGui tabs for cleaner integration and better usability. The logo, "wow.export.cpp" title text, and help button are removed from the navigation area.

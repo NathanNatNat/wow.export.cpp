@@ -15,8 +15,6 @@
 
 #include "modules/screen_source_select.h"
 #include "modules/screen_settings.h"
-#include "modules/module_test_a.h"
-#include "modules/module_test_b.h"
 #include "modules/tab_home.h"
 #include "modules/tab_maps.h"
 #include "modules/tab_zones.h"
@@ -303,16 +301,6 @@ void initialize() {
 		mod.initialize = initialize_fn ? initialize_fn : mounted_fn;
 		module_registry.emplace_back(name, std::move(mod));
 	};
-
-	add_module("module_test_a",
-		[]() { module_test_a::render(); },
-		[]() { module_test_a::mounted(); },
-		nullptr);
-
-	add_module("module_test_b",
-		[]() { module_test_b::render(); },
-		[]() { module_test_b::mounted(); },
-		nullptr);
 
 	add_module("source_select",
 		[]() { screen_source_select::render(); },
