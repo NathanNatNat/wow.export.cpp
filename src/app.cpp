@@ -1951,8 +1951,20 @@ void app::layout::EndSidebar() {
 }
 
 
+#ifdef _WIN32
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+#else
 int main(int argc, char* argv[]) {
+#endif
 	constants::init();
+
+#ifdef _WIN32
+	AllocConsole();
+	SetConsoleTitleW(L"wow.export.cpp — Debug Log");
+	FILE* fp = nullptr;
+	freopen_s(&fp, "CONOUT$", "w", stdout);
+	freopen_s(&fp, "CONOUT$", "w", stderr);
+#endif
 
 	logging::init();
 

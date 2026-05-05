@@ -162,6 +162,9 @@ struct Context {
 	// This callback covers M3/WMO rendering when the active renderer is not M2.
 	std::function<void(const float*, const float*)> renderActiveModel;
 
+	// Animation update for non-M2 active models (M3/WMO doodads).
+	std::function<void(float)> updateActiveAnimation;
+
 	// Set transform on active model (any type). Used for auto-rotation.
 	// May be null if the active model doesn't support setTransform.
 	std::function<void(const std::array<float, 3>&, const std::array<float, 3>&, const std::array<float, 3>&)> setActiveModelTransform;

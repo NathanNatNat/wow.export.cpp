@@ -146,10 +146,7 @@ void write(std::string_view message) {
 		}
 	}
 
-#ifndef BUILD_RELEASE
-	// Mirror output to debugger.
 	std::fputs(line.c_str(), stdout);
-#endif
 }
 
 /**

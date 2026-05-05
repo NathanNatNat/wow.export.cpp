@@ -490,7 +490,7 @@ return as_async_compat([this]() {
 	_load_textures().get();
 
 	global_seq_times.assign(m2->globalLoops.size(), 0.0f);
-	submesh_colors.assign(m2->colors.size() * 4, 0.0f);
+	submesh_colors.assign(m2->colors.size() * 4, 1.0f);
 	tex_weights.assign(m2->textureWeights.size(), 1.0f);
 
 	// load first skin

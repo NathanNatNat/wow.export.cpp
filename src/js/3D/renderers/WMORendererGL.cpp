@@ -467,7 +467,6 @@ void WMORendererGL::loadDoodadSet(uint32_t index) {
 					auto r = std::make_unique<M2RendererGL>(*data_buf, ctx, false, false);
 					r->setCASCSource(casc_source_);
 					r->load().get();
-					r->loadSkin(0).get();
 					renderer = r.get();
 					m2_renderers[fileDataID] = std::move(r);
 					m2_data_buffers_.push_back(std::move(data_buf));
@@ -496,6 +495,8 @@ void WMORendererGL::loadDoodadSet(uint32_t index) {
 			logging::write(std::format("Failed to load doodad {}: {}", fileDataID, e.what()));
 		}
 	}
+
+	logging::write(std::format("Doodad set loaded: {} renderers, {} unique M2s", doodadSetData.renderers.size(), m2_renderers.size()));
 
 	doodadSetData.visible = true;
 	doodadSets[index] = std::move(doodadSetData);
@@ -618,7 +619,11 @@ void WMORendererGL::render(const float* view_matrix, const float* projection_mat
 			}
 		}
 		if (sets_changed) {
-			updateSets();
+			try {
+				updateSets();
+			} catch (const std::exception& e) {
+				logging::write(std::format("Failed to update doodad sets: {}", e.what()));
+			}
 			prev_set_checked.resize(sv.size());
 			for (size_t i = 0; i < sv.size(); i++)
 				prev_set_checked[i] = sv[i].value("checked", false);

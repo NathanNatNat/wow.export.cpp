@@ -379,6 +379,8 @@ static void render_scene(State& state, Context& context) {
 				}
 			}
 		}
+	} else if (context.updateActiveAnimation) {
+		context.updateActiveAnimation(deltaTime);
 	}
 
 	// apply model rotation if speed is non-zero (non-character mode)

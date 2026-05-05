@@ -1561,6 +1561,10 @@ static void initialize() {
 				else if (active_renderer_result.wmo)
 					active_renderer_result.wmo->render(view_mat, proj_mat);
 			};
+			viewer_context.updateActiveAnimation = [](float delta_time) {
+				if (active_renderer_result.wmo)
+					active_renderer_result.wmo->updateAnimation(delta_time);
+			};
 			viewer_context.setActiveModelTransform = [](const std::array<float, 3>& pos,
 														const std::array<float, 3>& rot,
 														const std::array<float, 3>& scale) {

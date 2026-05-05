@@ -137,10 +137,10 @@
   - **Status**: Verified — fixed; renamed parameter to `float_count` and changed all call sites to pass `char_bone_matrices.size()` (float count) instead of `char_bone_matrices.size() / 16`
   - **Details**: JS checks `if (char_offset + 16 <= char_bone_matrices.length)` where `char_offset = char_idx * 16` (float index) and `.length` is the total float count (e.g., 1600 for 100 bones). C++ (M2RendererGL.cpp L1554) checks `if (char_offset + 16 <= matrix_count)` where `matrix_count` is passed as `vector.size() / 16` (bone count, e.g., 100) from call sites at model-viewer-gl.cpp L507/L539 and CharacterExporter.cpp L313. This compares a float-offset (e.g., 1584 for bone 99) against a bone count (100), so `1584 + 16 <= 100` is always false for any bone index > ~5. All external bone matrix copies beyond the first few bones silently fail, breaking collection model rigging. Fix: callers should pass `char_bone_matrices.size()` (float count) instead of `char_bone_matrices.size() / 16`.
 
-- [x] 28. [M2RendererGL.cpp] `submesh_colors` initialized to 1.0 instead of 0.0
-  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` line 423
-  - **Status**: Verified — fixed; changed initialization from `1.0f` to `0.0f` to match JS `Float32Array` zero-fill
-  - **Details**: JS initializes `this.submesh_colors = new Float32Array(this.m2.colors.length * 4)` which zero-fills. C++ (M2RendererGL.cpp L495) uses `submesh_colors.assign(m2->colors.size() * 4, 1.0f)` which fills with 1.0. Before any animation plays, submeshes with a valid `color_idx` will have RGBA=(0,0,0,0) in JS (invisible, skipped by `alpha <= 0` check) but RGBA=(1,1,1,1) in C++ (fully visible). This is a visual difference in the initial render state before `playAnimation` or `stopAnimation` is called. Fix: change to `submesh_colors.assign(m2->colors.size() * 4, 0.0f)`.
+- [x] 28. [M2RendererGL.cpp] `submesh_colors` must be initialized to 1.0, not 0.0
+  - **JS Source**: `src/js/3D/renderers/M2RendererGL.js` line 423, `stopAnimation()` line 789
+  - **Status**: Verified — reverted to `1.0f`; the previous "fix" to `0.0f` was incorrect and broke WMO doodad rendering
+  - **Details**: JS `Float32Array` zero-fills on construction, but JS `stopAnimation()` immediately fills `submesh_colors` with 1.0 before evaluating rest-pose tracks. For standalone M2 models, `playAnimation`/`stopAnimation` is called before rendering, so the zero init is harmless. But WMO doodad M2s have no animation — they never call `stopAnimation`, so the init value is the runtime value. With 0.0, `alpha <= 0` culls every draw call that has a valid `color_idx`, making all such doodads invisible. The correct C++ init is `1.0f`, matching the effective JS state after `stopAnimation()`. Commit `22922e44` (#28) introduced the regression.
 
 - [x] 29. [file-writer.cpp] FileWriter opens in text mode, producing `\r\n` line endings on Windows
   - **JS Source**: `src/js/file-writer.js` line 38

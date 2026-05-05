@@ -336,7 +336,7 @@ target_include_directories(portable_file_dialogs INTERFACE extern/portable-file-
 #  Main executable
 # ════════════════════════════════════════════════════════════════
 
-add_executable(wow_export_cpp src/app.cpp)
+add_executable(wow_export_cpp WIN32 src/app.cpp)
 
 target_include_directories(wow_export_cpp PRIVATE
     ${CMAKE_SOURCE_DIR}/src
